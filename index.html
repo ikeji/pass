@@ -176,7 +176,8 @@
   (. (. (fetch "public_suffix_list.dat") then (fn (r) (r.text))) then (function (list)
     (publicSuffixList.parse list punycode.toASCII)
     (var domain (publicSuffixList.getDomain targetUrl.host))
-    (set! model.input.siteName domain))))
+    (set! model.input.siteName domain)
+    (render))))
 
 (getServiceName)
   
