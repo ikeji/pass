@@ -1,0 +1,230 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="./material.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  </head>
+  <body>
+    <div class="contents">Loading...</div>
+    <script src="./material.min.js"></script>
+    <script src="./react.min.js"></script>
+    <script src="./react-dom.min.js"></script>
+    <script src="./buffer.js"></script>
+    <script src="./setImmediate.js"></script>
+    <script src="./unorm.js"></script>
+    <script src="./scrypt.js"></script>
+    <script src="./publicsuffixlist.min.js"></script>
+    <script> var module = {}; </script>
+    <script src="./punycode.js"></script>
+    <script type="text/jsise">
+
+(defmacro react-html
+  (fn-with-name rhtml (node)
+    (quasiquote
+      ((React.createElement
+         (unquote
+           (if (re-match "^[a-z0-9]+$" (symbol->string (first node)))
+             (symbol->string (first node))
+             (first node)))
+         (object (unquote-splicing (second node)))
+         (unquote-splicing
+           (map (fn (n)
+                  (if (is-array? n)
+                    (if (is-symbol-of? (first n) "unquote")
+                      (rest n)
+                      (first (rhtml n)))
+                    n))
+                (rest (rest node)))))))))
+
+(define-macro define-react-template
+  (syntax-template
+    (define-function ~0 (prop)
+      (return (react-html ~1-)))))
+  
+(define-macro define-react-component
+  (syntax-template
+    (var ~0 (React.createClass (object ~1-)))))
+
+(define-macro define-mdl-component
+  (syntax-template
+    (define-react-component ~0
+      componentDidMount (function ()
+        (window.componentHandler.upgradeElements
+          (ReactDOM.findDOMNode this)))
+      ~1-)))
+
+(// React wrapper for MDL )
+
+(define-react-template Spinner
+  (div ("className" "mdl-progress mdl-js-progress mdl-progress__indeterminate")))
+
+(define-mdl-component TextInput
+  getDefaultProps (fn () (object id "a" label "label" value "" onChange (fn () undefined)))
+  render (fn ()
+    (react-html (div (className "mdl-textfield mdl-js-textfield mdl-textfield--floating-label")
+      (input (className "mdl-textfield__input"
+              type "text"
+              id this.props.id
+              value this.props.value
+              onChange this.props.onChange))
+      (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
+
+(define-mdl-component Button
+  getDefaultProps (fn () (object children "label" onClick (fn (e) (e.preventDefault))))
+  render (fn ()
+    (react-html
+      (button (className "mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored"
+               onClick this.props.onClick)
+        this.props.children))))
+
+(define-mdl-component ProgressBar
+  componentDidUpdate (function ()
+    (. (. (ReactDOM.findDOMNode this) -MaterialProgress) setProgress this.props.progress))
+  getDefaultProps (fn () (object progress 0))
+  render (fn () (react-html
+    (div (className "mdl-progress mdl-js-progress"
+          style (object "width" "300px"))))))
+
+(define-react-template MainTemplate
+  (div (className "mdl-layout mdl-layout--fixed-header mdl-js-layout mdl-color--grey-100")
+    (header (className "mdl-layout__header mdl-layout__header--scroll mdl-color--grey-100 mdl-color-text--grey-800")
+      (div (className "mdl-layout__header-row")
+        (span (className "mdl-layout-title") "scrypt test")))
+    (div (style (object "width" "100%"
+                        "height" "40vh"
+                        "background-color" "#3F51B5")))
+    (main (style (object "margin-top" "-35vh" "width" "calc(100% - 16px)")
+           className "mdl-layout__content mdl-grid")
+        (div (className "mdl-cell mdl-cell--2-col mdl-cell--hide-tablet mdl-cell--hide-phone"))
+        (div (className "mdl-color--white mdl-shadow--4dp content mdl-color-text--grey-800 mdl-cell mdl-cell--8-col"
+              style (object "padding" "80px 56px"))
+          prop.children))
+    (footer (className "mdl-mini-footer")
+      (div (className "mdl-mini-footer--left-section")
+        "Powered by"
+        (ul (className "mdl-mini-footer--link-list")
+          (li () (a (href "https://facebook.github.io/react/") "ReactJS"))
+          (li () (a (href "https://getmdl.io/") "Material design lite"))
+          (li () (a (href "https://github.com/ricmoo/scrypt-js") "scrypt-js"))
+          (li () (a (href "https://publicsuffix.org/") "Public suffix list"))
+          (li () (a (href "https://github.com/gorhill/publicsuffixlist.js") "publicsuffixlist.js"))
+          (li () (a (href "https://github.com/bestiejs/punycode.js") "punycode.js"))
+          (li () "jsise"))))))
+
+(// Model for this app)
+
+(var model (object
+  input (object
+    masterPassword ""
+    siteName ""
+    userid ""
+    running false)
+  output (object
+    progress 0
+    status "initialied...."
+    password "-")))
+
+(// Controller for this app)
+
+(define-function generate (e)
+  (e.preventDefault)
+  (when model.input.running
+    (return false))
+  (set! model.input.running true)
+  (set! model.output.status "generating")
+  (set! model.output.password "-")
+  (render)
+
+  (var input (+ model.input.masterPassword "|"
+                model.input.siteName "|"
+                model.input.userid))
+  (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
+  (var starttime (. (new Date) getTime))
+  (scrypt inputbuf inputbuf (<< 1 19) 8 1 32 (function (error progress key)
+    (when (not model.input.running)
+       (return true))
+    (when error
+      (set! model.input.running false)
+      (set! model.output.status error)
+      (render)
+      (return false))
+    (when key
+      (set! model.input.running false)
+      (set! model.output.status "Success")
+      (var keybuf (new buffer.Buffer key))
+      (var keybase64 (. keybuf toString "base64"))
+      (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
+      (var pass (. keynospecial substring 0 8))
+      (set! model.output.password pass)
+      (render)
+      (return false))
+    (when progress
+      (set! model.output.status (+ (. (Math.floor (* progress 100)) toString) "% done."))
+      (set! model.output.progress (* progress 100))
+      (render)))))
+
+(define-function cancel (e)
+  (e.preventDefault)
+  (set! model.input.running false)
+  (set! model.output.status "Cancelled")
+  (render))
+
+(define-function getServiceName ()
+  (var thisUrl (new URL location.href))
+  (when (not (. thisUrl.searchParams has "url"))
+    (return null))
+  (var targetUrl (new URL (. thisUrl.searchParams get "url")))
+  (. (. (fetch "public_suffix_list.dat") then (fn (r) (r.text))) then (function (list)
+    (publicSuffixList.parse list punycode.toASCII)
+    (var domain (publicSuffixList.getDomain targetUrl.host))
+    (set! model.input.siteName domain))))
+
+(getServiceName)
+  
+
+(// Component for this app )
+
+(define-react-template Main (MainTemplate ()
+  (PasswordInput (input prop.model.input))
+  (ResultPanel (output prop.model.output))))
+
+(define-react-template PasswordInput
+  (form (action "#")
+    (h4 () "Input seeds")
+    (TextInput (id "pass"
+                label "master password"
+                value prop.input.masterPassword
+                onChange (function (e) (. prop.input -masterPassword e.target.value) (render))))
+    (TextInput (id "sitename"
+                label "Site name"
+                value prop.input.siteName
+                onChange (function (e) (. prop.input -siteName e.target.value) (render))))
+    (TextInput (id "userid"
+                label "User id"
+                value prop.input.userid
+                onChange (function (e) (. prop.input -userid e.target.value) (render))))
+    (br ())
+    (Button (onClick (if (not prop.input.running) generate cancel))
+      (unquote if (not prop.input.running) "generate" "cancel"))))
+
+(define-react-template ResultPanel
+  (div ()
+    (h4 () "status")
+    (div () prop.output.status)
+    (ProgressBar (progress prop.output.progress))
+    (h4 () "password")
+    (div () prop.output.password)))
+
+(// Entry point )
+(define-function render ()
+  (ReactDOM.render (react-html (Main (model model)))
+    (get-element-by-class "contents")))
+
+(. window -render render)
+(. window -model model)
+(render)
+(setTimeout render 200)
+
+    </script>
+    <script src="./jsise.js"></script>
+  </body>
+</html>
