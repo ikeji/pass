@@ -194,10 +194,12 @@
                 label "master password"
                 value prop.input.masterPassword
                 onChange (function (e) (. prop.input -masterPassword e.target.value) (render))))
+    (br ())
     (TextInput (id "sitename"
                 label "Site name"
                 value prop.input.siteName
                 onChange (function (e) (. prop.input -siteName e.target.value) (render))))
+    (br ())
     (TextInput (id "userid"
                 label "User id"
                 value prop.input.userid
