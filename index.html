@@ -139,28 +139,29 @@
                 model.input.userid))
   (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
   (var starttime (. (new Date) getTime))
-  (scrypt inputbuf inputbuf (<< 1 19) 8 1 32 (function (error progress key)
-    (when (not model.input.running)
-       (return true))
-    (when error
-      (set! model.input.running false)
-      (set! model.output.status error)
-      (render)
-      (return false))
-    (when key
-      (set! model.input.running false)
-      (set! model.output.status "Success")
-      (var keybuf (new buffer.Buffer key))
-      (var keybase64 (. keybuf toString "base64"))
-      (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
-      (var pass (. keynospecial substring 0 8))
-      (set! model.output.password pass)
-      (render)
-      (return false))
-    (when progress
-      (set! model.output.status (+ (. (Math.floor (* progress 100)) toString) "% done."))
-      (set! model.output.progress (* progress 100))
-      (render)))))
+  (setTimeout (function ()
+    (scrypt inputbuf inputbuf (<< 1 19) 8 1 32 (function (error progress key)
+      (when (not model.input.running)
+         (return true))
+      (when error
+        (set! model.input.running false)
+        (set! model.output.status error)
+        (render)
+        (return false))
+      (when key
+        (set! model.input.running false)
+        (set! model.output.status "Success")
+        (var keybuf (new buffer.Buffer key))
+        (var keybase64 (. keybuf toString "base64"))
+        (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
+        (var pass (. keynospecial substring 0 8))
+        (set! model.output.password pass)
+        (render)
+        (return false))
+      (when progress
+        (set! model.output.status (+ (. (Math.floor (* progress 100)) toString) "% done."))
+        (set! model.output.progress (Math.floor (* progress 100)))
+        (render))))) 0))
 
 (define-function cancel (e)
   (e.preventDefault)
@@ -180,7 +181,6 @@
     (render))))
 
 (getServiceName)
-  
 
 (// Component for this app )
 
