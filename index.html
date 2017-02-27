@@ -186,7 +186,8 @@
 
 (define-react-template Main (MainTemplate ()
   (PasswordInput (input prop.model.input))
-  (ResultPanel (output prop.model.output))))
+  (ResultPanel (output prop.model.output))
+  (Bookmarklet ())))
 
 (define-react-template PasswordInput
   (form (action "#")
@@ -216,6 +217,14 @@
     (ProgressBar (progress prop.output.progress))
     (h4 () "password")
     (div () prop.output.password)))
+
+(define-react-template Bookmarklet
+  (div ()
+    (h4 () "Bookmarklet")
+    "Drag this link to bookmark bar : "
+    (a (href "javascript:void(function(){window.open('http://pass.ikeji.ma/?url='+encodeURIComponent(location.href));})()"
+        onClick (fn (e) (e.preventDefault)))
+      "Generate Password")))
 
 (// Entry point )
 (define-function render ()
