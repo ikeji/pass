@@ -86,22 +86,23 @@
           style (object "width" "300px"))))))
 
 (define-react-template MainTemplate
-  (div (className "mdl-layout mdl-layout mdl-layout--fixed-header mdl-js-layout mdl-color--grey-100")
-    (header (className "mdl-layout__header mdl-layout__header--scroll mdl-color--grey-100 mdl-color-text--grey-800")
+  (div (className "mdl-layout mdl-js-layout mdl-layout--fixed-header")
+    (header (className "mdl-layout__header mdl-layout__header--scroll")
       (div (className "mdl-layout__header-row")
         (span (className "mdl-layout-title") "scrypt test")))
     (div (style (object "width" "100%"
-                        "height" "200px"
-                        "background-color" "#3F51B5")))
-    (main (style (object "margin-top" "-151px" "flex-shrink" "0")
+                        "height" "30vh"
+                        "flexShrink" "0"
+                        "backgroundColor" "#3F51B5")))
+    (main (style (object "marginTop" "-30vh" "flexShrink" "0")
            className "mdl-layout__content")
-      (div (style (object "max-width" "1600px" "width" "calc(100% - 16px)" "margin" "0 auto")
+      (div (style (object "maxWidth" "1600px" "width" "calc(100% - 16px)" "margin" "0 auto")
             className "mdl-grid")
         (div (className "mdl-cell mdl-cell--2-col mdl-cell--hide-tablet mdl-cell--hide-phone"))
         (div (className "mdl-color--white mdl-shadow--4dp content mdl-color-text--grey-800 mdl-cell mdl-cell--8-col"
-              style (object "padding" "80px 56px" "border-radius" "2px" "margin-bottom" "80px"))
+              style (object "padding" "80px 56px" "borderRadius" "2px" "marginBottom" "80px"))
           prop.children)))
-    (footer (className "mdl-mini-footer")
+    (footer (className "mdl-mini-footer" style (object "flexShrink" "0"))
       (div (className "mdl-mini-footer--left-section")
         "Powered by"
         (ul (className "mdl-mini-footer--link-list")
@@ -261,6 +262,7 @@
     (h4 () "TODOs")
     (ul ()
       (li () "Copy API")
+      (li () "Use icon for sample check.")
       (li () "Store history to cookie.")
       (li () "Save&Load history.")
       (li () "Fix style sheet.")
