@@ -1,5 +1,6 @@
 <html>
   <head>
+    <title>Scrypttest</title>
     <link rel="stylesheet" href="./material.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
   </head>
@@ -85,19 +86,21 @@
           style (object "width" "300px"))))))
 
 (define-react-template MainTemplate
-  (div (className "mdl-layout mdl-layout--fixed-header mdl-js-layout mdl-color--grey-100")
+  (div (className "mdl-layout mdl-layout mdl-layout--fixed-header mdl-js-layout mdl-color--grey-100")
     (header (className "mdl-layout__header mdl-layout__header--scroll mdl-color--grey-100 mdl-color-text--grey-800")
       (div (className "mdl-layout__header-row")
         (span (className "mdl-layout-title") "scrypt test")))
     (div (style (object "width" "100%"
-                        "height" "40vh"
+                        "height" "200px"
                         "background-color" "#3F51B5")))
-    (main (style (object "margin-top" "-35vh" "width" "calc(100% - 16px)")
-           className "mdl-layout__content mdl-grid")
+    (main (style (object "margin-top" "-151px" "flex-shrink" "0")
+           className "mdl-layout__content")
+      (div (style (object "max-width" "1600px" "width" "calc(100% - 16px)" "margin" "0 auto")
+            className "mdl-grid")
         (div (className "mdl-cell mdl-cell--2-col mdl-cell--hide-tablet mdl-cell--hide-phone"))
         (div (className "mdl-color--white mdl-shadow--4dp content mdl-color-text--grey-800 mdl-cell mdl-cell--8-col"
-              style (object "padding" "80px 56px"))
-          prop.children))
+              style (object "padding" "80px 56px" "border-radius" "2px" "margin-bottom" "80px"))
+          prop.children)))
     (footer (className "mdl-mini-footer")
       (div (className "mdl-mini-footer--left-section")
         "Powered by"
@@ -115,8 +118,10 @@
 (var model (object
   input (object
     masterPassword ""
+    sample ""
     siteName ""
     userid ""
+    comment ""
     running false)
   output (object
     progress 0
@@ -124,6 +129,20 @@
     password "-")))
 
 (// Controller for this app)
+
+(define-function updateSample ()
+  (var input model.input.masterPassword)
+  (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
+  (setTimeout (function ()
+    (scrypt inputbuf inputbuf (<< 1 10) 8 1 32 (function (error progress key)
+      (when key
+        (var keybuf (new buffer.Buffer key))
+        (var keybase64 (. keybuf toString "base64"))
+        (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
+        (var sample (. keynospecial substring 0 3))
+        (set! model.input.sample sample)
+        (render)
+        (return false)))))))
 
 (define-function generate (e)
   (e.preventDefault)
@@ -136,7 +155,9 @@
 
   (var input (+ model.input.masterPassword "|"
                 model.input.siteName "|"
-                model.input.userid))
+                model.input.userid "|"
+                model.input.comment))
+  (console.log (+ "target text: " input))
   (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
   (var starttime (. (new Date) getTime))
   (setTimeout (function ()
@@ -150,7 +171,7 @@
         (return false))
       (when key
         (set! model.input.running false)
-        (set! model.output.status "Success")
+        (set! model.output.status (+ "Success (" (/ (- (. (new Date) getTime) starttime) 1000) "sec)"))
         (var keybuf (new buffer.Buffer key))
         (var keybase64 (. keybuf toString "base64"))
         (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
@@ -161,7 +182,7 @@
       (when progress
         (set! model.output.status (+ (. (Math.floor (* progress 100)) toString) "% done."))
         (set! model.output.progress (Math.floor (* progress 100)))
-        (render))))) 0))
+        (render))))) 100))
 
 (define-function cancel (e)
   (e.preventDefault)
@@ -185,9 +206,15 @@
 (// Component for this app )
 
 (define-react-template Main (MainTemplate ()
+  (HistoryList (history prop.model.history))
   (PasswordInput (input prop.model.input))
   (ResultPanel (output prop.model.output))
-  (Bookmarklet ())))
+  (Bookmarklet ())
+  (TODO ())))
+
+(define-react-template HistoryList
+  (div ()
+            ))
 
 (define-react-template PasswordInput
   (form (action "#")
@@ -195,7 +222,10 @@
     (TextInput (id "pass"
                 label "master password"
                 value prop.input.masterPassword
-                onChange (function (e) (. prop.input -masterPassword e.target.value) (render))))
+                onChange (function (e) (. prop.input -masterPassword e.target.value)
+                                       (updateSample)
+                                       (render))))
+    (span (style (object "color" "green")) prop.input.sample)
     (br ())
     (TextInput (id "sitename"
                 label "Site name"
@@ -225,6 +255,18 @@
     (a (href "javascript:void(function(){window.open('https://pass.ikeji.ma/?url='+encodeURIComponent(location.href));})()"
         onClick (fn (e) (e.preventDefault)))
       "Generate Password")))
+
+(define-react-template TODO
+  (div ()
+    (h4 () "TODOs")
+    (ul ()
+      (li () "Copy API")
+      (li () "Store history to cookie.")
+      (li () "Save&Load history.")
+      (li () "Fix style sheet.")
+      (li () "")
+)))
+     
 
 (// Entry point )
 (define-function render ()
