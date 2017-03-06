@@ -53,6 +53,9 @@
           (ReactDOM.findDOMNode this)))
       ~1-)))
 
+(define-macro now-msec
+  (syntax-template (. (new Date) getTime)))
+
 (// React wrapper for MDL )
 
 (define-react-template Spinner
@@ -60,6 +63,8 @@
 
 (define-mdl-component TextInput
   getDefaultProps (fn () (object id "a" label "label" value "" onChange (fn () undefined)))
+  componentDidUpdate (fn (prevProp)
+    (. (. (ReactDOM.findDOMNode this) -MaterialTextfield) change this.props.value))
   render (fn ()
     (react-html (div (className "mdl-textfield mdl-js-textfield mdl-textfield--floating-label")
       (input (className "mdl-textfield__input"
@@ -120,6 +125,7 @@
   input (object
     masterPassword ""
     sample ""
+    lastUpdateMasterPasword 0
     siteName ""
     userid ""
     comment ""
@@ -131,10 +137,16 @@
 
 (// Controller for this app)
 
+(define-function updateMasterPassword (masterPassword)
+  (set! model.input.masterPassword masterPassword)
+  (set! model.input.lastUpdateMasterPasword (now-msec))
+  (updateSample)
+  (render))
+
 (define-function updateSample ()
   (var input model.input.masterPassword)
-  (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
-  (setTimeout (function ()
+  (ifs (!= input "") (
+    (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
     (scrypt inputbuf inputbuf (<< 1 10) 8 1 32 (function (error progress key)
       (when key
         (var keybuf (new buffer.Buffer key))
@@ -143,7 +155,17 @@
         (var sample (. keynospecial substring 0 3))
         (set! model.input.sample sample)
         (render)
-        (return false)))))))
+        (return false)))))
+    ((set! model.input.sample ""))))
+
+(var TIMEOUT_MS (* (* 5 1) 1000))
+
+(define-function clearMasterPassword ()
+  (when (and (!= model.input.masterPassword "")
+             (< (+ model.input.lastUpdateMasterPasword TIMEOUT_MS) (now-msec)))
+    (updateMasterPassword ""))
+  (setTimeout clearMasterPassword 1000))
+(clearMasterPassword)
 
 (define-function generate (e)
   (e.preventDefault)
@@ -160,7 +182,7 @@
                 model.input.comment))
   (console.log (+ "target text: " input))
   (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
-  (var starttime (. (new Date) getTime))
+  (var starttime (now-msec))
   (setTimeout (function ()
     (scrypt inputbuf inputbuf (<< 1 19) 8 1 32 (function (error progress key)
       (when (not model.input.running)
@@ -172,7 +194,7 @@
         (return false))
       (when key
         (set! model.input.running false)
-        (set! model.output.status (+ "Success (" (/ (- (. (new Date) getTime) starttime) 1000) "sec)"))
+        (set! model.output.status (+ "Success (" (/ (- (now-msec) starttime) 1000) "sec)"))
         (var keybuf (new buffer.Buffer key))
         (var keybase64 (. keybuf toString "base64"))
         (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
@@ -223,9 +245,7 @@
     (TextInput (id "pass"
                 label "master password"
                 value prop.input.masterPassword
-                onChange (function (e) (. prop.input -masterPassword e.target.value)
-                                       (updateSample)
-                                       (render))))
+                onChange (function (e) (updateMasterPassword e.target.value))))
     (span (style (object "color" "green")) prop.input.sample)
     (br ())
     (TextInput (id "sitename"
@@ -267,7 +287,11 @@
       (li () "Save&Load history.")
       (li () "Fix style sheet.")
       (li () "")
-)))
+    )
+    (h4 () "DONE")
+    (ul ()
+      (li () "Timeout work")
+    )))
      
 
 (// Entry point )
