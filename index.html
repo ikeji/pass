@@ -200,7 +200,8 @@
       (when key
         (var keybuf (new buffer.Buffer key))
         (var keybase64 (. keybuf toString "base64"))
-        (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
+        (var keynospecial
+            (. keybase64 replace (new RegExp "[^0-9a-zA-Z]" "g") ""))
         (var sample (. keynospecial substring 0 3))
         (set! model.input.sample sample)
         (render)
@@ -254,7 +255,8 @@
         (set! model.output.status (+ "Success (" (/ (- (now-msec) starttime) 1000) "sec)"))
         (var keybuf (new buffer.Buffer key))
         (var keybase64 (. keybuf toString "base64"))
-        (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
+        (var keynospecial
+            (. keybase64 replace (new RegExp "[^0-9a-zA-Z]" "g") ""))
         (var pass (. keynospecial substring 0 8))
         (set! model.output.password pass)
         (set! model.output.passwordGeneatedAt (now-msec))
