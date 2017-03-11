@@ -164,6 +164,8 @@
 
 (// Model for this app)
 
+(var NOT_GENERATED "(not generated yet)")
+
 (var model (object
   history (object
     list (list)
@@ -179,7 +181,8 @@
   output (object
     progress 0
     status "initialied...."
-    password "-")))
+    passwordGeneatedAt 0
+    password NOT_GENERATED)))
 
 (// Controller for this app)
 
@@ -204,14 +207,18 @@
         (return false)))))
     ((set! model.input.sample ""))))
 
-(var TIMEOUT_MS (* (* 5 60) 1000))
+(var TIMEOUT_MS (* (* 5 1) 1000))
 
-(define-function clearMasterPassword ()
+(define-function clearPasswords ()
   (when (and (!= model.input.masterPassword "")
              (< (+ model.input.lastUpdateMasterPasword TIMEOUT_MS) (now-msec)))
     (updateMasterPassword ""))
-  (setTimeout clearMasterPassword 1000))
-(clearMasterPassword)
+  (when (and (!= model.output.password NOT_GENERATED)
+             (< (+ model.output.passwordGeneatedAt TIMEOUT_MS) (now-msec)))
+    (set! model.output.password NOT_GENERATED)
+    (render))
+  (setTimeout clearPasswords 1000))
+(clearPasswords)
 
 (define-function generate (e)
   (e.preventDefault)
@@ -221,7 +228,7 @@
     (return false))
   (set! model.input.running true)
   (set! model.output.status "generating")
-  (set! model.output.password "-")
+  (set! model.output.password NOT_GENERATED)
   (set! model.history.visible true)
   (appendHisotry model.input)
   (render)
@@ -250,6 +257,7 @@
         (var keynospecial (. keybase64 replace (reg-exp "[^0-9a-zA-Z]") ""))
         (var pass (. keynospecial substring 0 8))
         (set! model.output.password pass)
+        (set! model.output.passwordGeneatedAt (now-msec))
         (render)
         (return false))
       (when progress
@@ -426,11 +434,11 @@
       (li () "Use icon for sample check.")
       (li () "Save&Load history.")
       (li () "Fix style sheet.")
-      (li () "Timeout work for result.")
       (li () "")
     )
     (h4 () "DONE")
     (ul ()
+      (li () "Timeout work for result.")
       (li () "Store history to local storage.")
       (li () "Copy API")
       (li () "Timeout work")
