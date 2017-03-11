@@ -31,7 +31,7 @@
          (unquote-splicing
            (map (fn (n)
                   (if (is-array? n)
-                    (if (is-symbol-of? (first n) "unquote")
+                    (if (is-symbol-of? (first n) ",")
                       (rest n)
                       (first (rhtml n)))
                     n))
@@ -83,6 +83,22 @@
                onClick this.props.onClick)
         this.props.children))))
 
+(define-mdl-component RisedButton
+  getDefaultProps (fn () (object children "label" onClick (fn (e) (e.preventDefault))))
+  render (fn ()
+    (react-html
+      (button (className "mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect"
+               onClick this.props.onClick)
+        this.props.children))))
+
+(define-mdl-component FlatAccentButton
+  getDefaultProps (fn () (object children "label" onClick (fn (e) (e.preventDefault))))
+  render (fn ()
+    (react-html
+      (button (className "mdl-button mdl-js-button mdl-button--accent mdl-js-ripple-effect"
+               onClick this.props.onClick)
+        this.props.children))))
+
 (define-mdl-component ProgressBar
   componentDidUpdate (function ()
     (. (. (ReactDOM.findDOMNode this) -MaterialProgress) setProgress this.props.progress))
@@ -123,6 +139,9 @@
 (// Model for this app)
 
 (var model (object
+  history (object
+    list (list)
+    visible true)
   input (object
     masterPassword ""
     sample ""
@@ -175,6 +194,8 @@
   (set! model.input.running true)
   (set! model.output.status "generating")
   (set! model.output.password "-")
+  (set! model.history.visible true)
+  (appendHisotry model.input)
   (render)
 
   (var input (+ model.input.masterPassword "|"
@@ -218,14 +239,65 @@
   (var thisUrl (new URL location.href))
   (when (not (. thisUrl.searchParams has "url"))
     (return null))
+  (set! model.history.visible false)
   (var targetUrl (new URL (. thisUrl.searchParams get "url")))
   (. (. (fetch "public_suffix_list.dat") then (fn (r) (r.text))) then (function (list)
     (publicSuffixList.parse list punycode.toASCII)
     (var domain (publicSuffixList.getDomain targetUrl.host))
     (set! model.input.siteName domain)
+    (var candidates
+      (. model.history.list filter (fn (i)
+        (== i.siteName domain))))
+    (when (< 0 candidates.length)
+      (var c (first candidates))
+      (set! model.input.userid c.userid)
+      (set! model.input.comment c.comment))
+    (when (< 1 candidates.length)
+      (set! model.history.visible true))
     (render))))
 
 (getServiceName)
+
+(define-function loadHistory ()
+  (set! model.history.list (JSON.parse (||
+            (window.localStorage.getItem "histories")
+            "[]")))
+  (when (== 0 model.history.list.length)
+    (set! model.history.visible false)))
+
+(loadHistory)
+
+(define-function saveHistory ()
+  (window.localStorage.setItem
+    "histories"
+    (JSON.stringify model.history.list)))
+
+(define-function appendHisotry (n)
+  (set! model.history.list
+    (. model.history.list filter (fn (e)
+      (not (and (== e.siteName n.siteName)
+                (== e.userid n.userid)
+                (== e.comment n.comment))))))
+  (. model.history.list unshift
+    (object siteName model.input.siteName
+            userid model.input.userid
+            comment model.input.comment))
+  (saveHistory))
+
+
+(define-function applyHisotry (e)
+  (set! model.input.siteName e.siteName)
+  (set! model.input.userid e.userid)
+  (set! model.input.comment e.comment)
+  (render))
+
+(define-function removeHistory (e)
+  (set! model.history.list
+    (. model.history.list filter
+            (fn (el) (not (=== e el)))))
+  (saveHistory)
+  (render))
+
 
 (// Component for this app )
 
@@ -236,9 +308,46 @@
   (Bookmarklet ())
   (TODO ())))
 
-(define-react-template HistoryList
+
+(define-react-template HistoryListItem
+  (tr ()
+    (td () (RisedButton (onClick (fn () (applyHisotry prop.item))) "Use"))
+    (td (className "mdl-data-table__cell--non-numeric")
+      prop.item.siteName)
+    (td (className "mdl-data-table__cell--non-numeric")
+      prop.item.userid)
+    (td (className "mdl-data-table__cell--non-numeric")
+      prop.item.comment)
+    (td () (FlatAccentButton (onClick (fn () (removeHistory prop.item))) "×"))))
+
+(define-react-template HistoryListTable
   (div ()
-            ))
+    (h4 () "History")
+    (table (className "mdl-data-table mdl-js-data-table mdl-shadow--2dp")
+      (thead ()
+        (tr ()
+          (th ())
+          (th (className "mdl-data-table__cell--non-numeric")
+            "Site name")
+          (th (className "mdl-data-table__cell--non-numeric")
+            "User id")
+          (th (className "mdl-data-table__cell--non-numeric")
+            "Comment")
+          (th ())))
+      (tbody ()
+        (, . prop.history.list map (fn (i) 
+              (react-html (HistoryListItem (item i)))))))))
+
+(defmacro empty?
+  (syntax-template
+    (== 0 (. ~0 -length))))
+
+(define-react-template HistoryList
+   (div ()
+     (, if (and prop.history.visible
+                (not (empty? prop.history.list)))
+       (react-html (HistoryListTable (history prop.history)))
+       (list))))
 
 (define-react-template PasswordInput
   (form (action "#")
@@ -260,7 +369,7 @@
                 onChange (function (e) (. prop.input -userid e.target.value) (render))))
     (br ())
     (Button (onClick (if (not prop.input.running) generate cancel))
-      (unquote if (not prop.input.running) "generate" "cancel"))))
+      (, if (not prop.input.running) "generate" "cancel"))))
 
 (define-react-template ResultPanel
   (div ()
