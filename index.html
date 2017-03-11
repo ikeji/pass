@@ -57,6 +57,10 @@
 (define-macro now-msec
   (syntax-template (. (new Date) getTime)))
 
+(defmacro empty?
+  (syntax-template
+    (== 0 (. ~0 -length))))
+
 (// React wrapper for MDL )
 
 (define-react-template Spinner
@@ -211,7 +215,7 @@
 
 (define-function generate (e)
   (e.preventDefault)
-  (when (== "" model.input.masterPassword)
+  (when (empty? model.input.masterPassword)
     (return false))
   (when model.input.running
     (return false))
@@ -297,6 +301,10 @@
     (JSON.stringify model.history.list)))
 
 (define-function appendHisotry (n)
+  (when (and (empty? n.siteName)
+             (empty? n.userid)
+             (empty? n.comment))
+    (return false))
   (set! model.history.list
     (. model.history.list filter (fn (e)
       (not (and (== e.siteName n.siteName)
@@ -362,10 +370,6 @@
         (, . prop.history.list map (fn (i) 
               (react-html (HistoryListItem (item i)))))))))
 
-(defmacro empty?
-  (syntax-template
-    (== 0 (. ~0 -length))))
-
 (define-react-template HistoryList
    (div ()
      (, if (and prop.history.visible
@@ -393,7 +397,7 @@
                 onChange (function (e) (. prop.input -userid e.target.value) (render))))
     (br ())
     (Button (onClick (if (not prop.input.running) generate cancel)
-             disabled (== "" prop.input.masterPassword))
+             disabled (empty? prop.input.masterPassword))
       (, if (not prop.input.running) "generate" "cancel"))))
 
 (define-react-template ResultPanel
