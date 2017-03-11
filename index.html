@@ -76,11 +76,15 @@
       (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
 
 (define-mdl-component Button
-  getDefaultProps (fn () (object children "label" onClick (fn (e) (e.preventDefault))))
+  getDefaultProps (fn () (object
+    children "label"
+    onClick (fn (e) (e.preventDefault))
+    disabled false))
   render (fn ()
     (react-html
       (button (className "mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored"
-               onClick this.props.onClick)
+               onClick this.props.onClick
+               disabled this.props.disabled)
         this.props.children))))
 
 (define-mdl-component RisedButton
@@ -207,6 +211,8 @@
 
 (define-function generate (e)
   (e.preventDefault)
+  (when (== "" model.input.masterPassword)
+    (return false))
   (when model.input.running
     (return false))
   (set! model.input.running true)
@@ -386,7 +392,8 @@
                 value prop.input.userid
                 onChange (function (e) (. prop.input -userid e.target.value) (render))))
     (br ())
-    (Button (onClick (if (not prop.input.running) generate cancel))
+    (Button (onClick (if (not prop.input.running) generate cancel)
+             disabled (== "" prop.input.masterPassword))
       (, if (not prop.input.running) "generate" "cancel"))))
 
 (define-react-template ResultPanel
