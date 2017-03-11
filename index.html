@@ -406,6 +406,11 @@
                 value prop.input.userid
                 onChange (function (e) (. prop.input -userid e.target.value) (render))))
     (br ())
+    (TextInput (id "comment"
+                label "Comment"
+                value prop.input.comment
+                onChange (function (e) (. prop.input -comment e.target.value) (render))))
+    (br ())
     (Button (onClick (if (not prop.input.running) generate cancel)
              disabled (empty? prop.input.masterPassword))
       (, if (not prop.input.running) "generate" "cancel"))))
