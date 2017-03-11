@@ -158,7 +158,7 @@
         (return false)))))
     ((set! model.input.sample ""))))
 
-(var TIMEOUT_MS (* (* 5 1) 1000))
+(var TIMEOUT_MS (* (* 5 60) 1000))
 
 (define-function clearMasterPassword ()
   (when (and (!= model.input.masterPassword "")
