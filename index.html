@@ -136,6 +136,24 @@
           (li () (a (href "https://github.com/bestiejs/punycode.js") "punycode.js"))
           (li () "jsise"))))))
 
+(define-mdl-component CopyableTextInput
+  getDefaultProps (fn () (object id "a" label "label" value ""))
+  componentDidUpdate (fn (prevProp)
+    (. (. (ReactDOM.findDOMNode this) -MaterialTextfield) change this.props.value))
+  onClick (function (e)
+    (e.target.select)
+    (document.execCommand "copy")
+    (e.preventDefault))
+  render (fn ()
+    (react-html (div (className "mdl-textfield mdl-js-textfield")
+      (input (className "mdl-textfield__input"
+              type "text"
+              id this.props.id
+              value this.props.value
+              onClick this.onClick
+              readOnly true))
+      (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
+
 (// Model for this app)
 
 (var model (object
@@ -377,7 +395,10 @@
     (div () prop.output.status)
     (ProgressBar (progress prop.output.progress))
     (h4 () "password")
-    (div () prop.output.password)))
+    (div ()
+      (CopyableTextInput (id "result"
+                          label "password"
+                          value prop.output.password)))))
 
 (define-react-template Bookmarklet
   (div ()
@@ -391,9 +412,7 @@
   (div ()
     (h4 () "TODOs")
     (ul ()
-      (li () "Copy API")
       (li () "Use icon for sample check.")
-      (li () "Store history to cookie.")
       (li () "Save&Load history.")
       (li () "Fix style sheet.")
       (li () "Timeout work for result.")
@@ -401,6 +420,8 @@
     )
     (h4 () "DONE")
     (ul ()
+      (li () "Store history to local storage.")
+      (li () "Copy API")
       (li () "Timeout work")
     )))
      
