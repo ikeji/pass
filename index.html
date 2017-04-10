@@ -19,7 +19,7 @@
     <script src="./punycode.js"></script>
     <script type="text/jsise">
 
-(defmacro react-html
+(define-macro react-html
   (fn-with-name rhtml (node)
     (quasiquote
       ((React.createElement
@@ -68,15 +68,17 @@
 
 (define-mdl-component TextInput
   getDefaultProps (fn () (object id "a" label "label" value "" onChange (fn () undefined)))
-  componentDidUpdate (fn (prevProp)
-    (. (. (ReactDOM.findDOMNode this) -MaterialTextfield) change this.props.value))
+  componentDidUpdate (function (prevProp)
+    (when (!= this.inputRef document.activeElement)
+      (. (. (ReactDOM.findDOMNode this) -MaterialTextfield) change this.props.value)))
   render (fn ()
     (react-html (div (className "mdl-textfield mdl-js-textfield mdl-textfield--floating-label")
       (input (className "mdl-textfield__input"
               type "text"
               id this.props.id
               value this.props.value
-              onChange this.props.onChange))
+              onChange this.props.onChange
+              ref (. (function (c) (set! this.inputRef c)) bind this)))
       (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
 
 (define-mdl-component Button
@@ -162,6 +164,19 @@
               readOnly true))
       (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
 
+(define-react-template Table
+  (table (className "mdl-data-table mdl-js-data-table mdl-shadow--2dp")
+    prop.children))
+
+(define-react-template Th
+  (th (className "mdl-data-table__cell--non-numeric")
+    prop.children))
+
+(define-react-template Td
+  (td (className "mdl-data-table__cell--non-numeric")
+    prop.children))
+
+
 (// Model for this app)
 
 (var NOT_GENERATED "(not generated yet)")
@@ -230,7 +245,6 @@
   (set! model.input.running true)
   (set! model.output.status "generating")
   (set! model.output.password NOT_GENERATED)
-  (set! model.history.visible true)
   (appendHisotry model.input)
   (render)
 
@@ -239,7 +253,7 @@
                 model.input.userid "|"
                 model.input.comment))
   (console.log (+ "target text: " input))
-  (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
+  (var inputbuf (Array.from (new buffer.Buffer (input.normalize) "utf8")))
   (var starttime (now-msec))
   (setTimeout (function ()
     (scrypt inputbuf inputbuf (<< 1 19) 8 1 32 (function (error progress key)
@@ -273,6 +287,16 @@
   (set! model.output.status "Cancelled")
   (render))
 
+
+(define-function loadHistory ()
+  (set! model.history.list (JSON.parse (||
+            (window.localStorage.getItem "histories")
+            "[]")))
+  (when (== 0 model.history.list.length)
+    (set! model.history.visible false)))
+
+(loadHistory)
+
 (define-function getServiceName ()
   (var thisUrl (new URL location.href))
   (when (not (. thisUrl.searchParams has "url"))
@@ -295,15 +319,6 @@
     (render))))
 
 (getServiceName)
-
-(define-function loadHistory ()
-  (set! model.history.list (JSON.parse (||
-            (window.localStorage.getItem "histories")
-            "[]")))
-  (when (== 0 model.history.list.length)
-    (set! model.history.visible false)))
-
-(loadHistory)
 
 (define-function saveHistory ()
   (window.localStorage.setItem
@@ -354,12 +369,10 @@
 (define-react-template HistoryListItem
   (tr ()
     (td () (RisedButton (onClick (fn () (applyHisotry prop.item))) "Use"))
-    (td (className "mdl-data-table__cell--non-numeric")
-      prop.item.siteName)
-    (td (className "mdl-data-table__cell--non-numeric")
-      prop.item.userid)
-    (td (className "mdl-data-table__cell--non-numeric")
-      prop.item.comment)
+    (Td ()
+      (div () prop.item.siteName)
+      (div () prop.item.userid)
+      (div () prop.item.comment))
     (td () (FlatAccentButton (onClick (fn () (removeHistory prop.item))) "×"))))
 
 (define-react-template HistoryListTable
@@ -369,12 +382,10 @@
       (thead ()
         (tr ()
           (th ())
-          (th (className "mdl-data-table__cell--non-numeric")
-            "Site name")
-          (th (className "mdl-data-table__cell--non-numeric")
-            "User id")
-          (th (className "mdl-data-table__cell--non-numeric")
-            "Comment")
+          (Th ()
+            (div (style (object "lineHeight" 1)) "Site name")
+            (div (style (object "lineHeight" 1)) "User id")
+            (div (style (object "lineHeight" 1)) "Comment"))
           (th ())))
       (tbody ()
         (, . prop.history.list map (fn (i) 
@@ -438,6 +449,7 @@
   (div ()
     (h4 () "TODOs")
     (ul ()
+      (li () "Auto hide password when lost focus.")
       (li () "Use icon for sample check.")
       (li () "Save&Load history.")
       (li () "Fix style sheet.")
@@ -460,7 +472,6 @@
 (. window -render render)
 (. window -model model)
 (render)
-(setTimeout render 200)
 
     </script>
     <script src="./jsise.js"></script>
