@@ -4,27 +4,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A static, client-side deterministic password generator ("scrypt test") served via GitHub Pages at `pass.ikeji.ma` (see `CNAME`). There is no build step, package manager, linter, or test suite — all dependencies are vendored as minified files in the repo root (original archives in `dist/`).
+A static, client-side deterministic password generator ("scrypt test") served via GitHub Pages at `pass.ikeji.ma` (see `CNAME`). There is no build step: all runtime dependencies are vendored as files in the repo root (npm tarballs / source archives kept in `dist/`). The page must never load scripts, styles or fonts from the network.
 
 - Active development happens on the `gh-pages` branch (which is what gets deployed). `master` is older and behind.
-- To run locally, serve the directory over HTTP (e.g. `python3 -m http.server`) and open `index.html`. Plain `file://` won't work because the app `fetch`es `public_suffix_list.dat`.
+- To run locally, serve the directory over HTTP (e.g. `python3 -m http.server`) and open `index.html`. Plain `file://` won't work because the app `fetch`es `public_suffix_list.dat` and needs `localStorage`.
+
+## Tests
+
+Integration tests live in `test/` (Node + jsdom; dev-only, nothing there is served):
+
+```sh
+cd test && npm install
+npm test                                   # all tests (~1-2 min; scrypt N=2^19 runs for real)
+node --test --test-name-pattern="presets" app.test.js   # a single test
+node lib/compile-jsise.js > /tmp/out.js    # dump the JavaScript jsise generates (for debugging)
+```
+
+- `golden.json` holds passwords recorded from the original app (`record-golden-legacy.js`), and `golden.test.js` checks them against Node's own `crypto.scryptSync`. `golden-rules.json` freezes the outputs of the rule-based generator. **These must never be re-recorded to make a change pass**: a diff there means users' existing passwords changed.
+- `test/lib/browser.js` serves the repo from a fake `https://app.test/` origin, blocks every other URL (tests assert nothing was blocked), and shims what jsdom lacks (`setImmediate`, `matchMedia`, `fetch`, clipboard).
 
 ## Architecture
 
-All application code lives inline in `index.html` inside `<script type="text/jsise">`. **It is written in jsise, a Lisp dialect**, not JavaScript. `jsise.js` (loaded last) finds `text/jsise` scripts and compiles/evaluates them in the browser. Key jsise idioms used here:
+All application code lives inline in `index.html` inside `<script type="text/jsise">`. **It is written in jsise, the author's Lisp dialect**, not JavaScript (compiler source: `~/work/lang/js/jsise`). `jsise.js` (loaded last) compiles and `eval`s `text/jsise` scripts in the browser; it only reads inline scripts, and macros don't carry over between script blocks. Idioms and pitfalls:
 
-- `define-macro` / `defmacro` with `syntax-template` (`~0`, `~1-` for positional/rest args) or `quasiquote`/`unquote`.
-- `(. obj method args)` calls a method; `(. obj -prop value)` sets a property; `(set! a.b v)` assigns.
-- `(// comment)` is a comment form.
-- Custom macros defined at the top of the script: `react-html` (S-expression → `React.createElement`; lowercase tag names become DOM elements, `(, expr)` splices raw expressions), `define-react-template` (stateless function component taking `prop`), `define-react-component` (`React.createClass`), and `define-mdl-component` (component that calls `componentHandler.upgradeElements` on mount for Material Design Lite).
+- `(. obj method args)` calls a method; `(. obj -prop)` gets / `(. obj -prop value)` sets a property; `(set! a.b v)` assigns. `(// comment)` is a comment form.
+- `fn` takes a single expression; use `function` when the body has statements (`when`, `ifs`, `var`, `return`, `for`, `while`, `try`). `cond`/`if` are expressions, `when`/`ifs` are statements.
+- The vendored stdlib has no `!==` or `>=` (`=>` emits `=>`), and `-`/`*` are binary only. Use `(not (=== a b))` and `(<= b a)`.
+- `define-function` is `var f = function f…`, so it is not hoisted: the entry point at the bottom must come after everything it calls.
+- `react-html` turns S-expressions into `React.createElement`: lowercase tag names become DOM elements, attributes are the second list, and any JavaScript expression used as a child must be wrapped as `(, expr)` (e.g. `(, + i 1)`); bare strings and symbols pass through. `define-react-template` defines a function component taking `prop`.
 
-The app follows a simple global model/render pattern (React 15 + MDL):
+The app uses a global model/render pattern (React 18 via `ReactDOM.createRoot`, plain function components, no hooks):
 
-- A single mutable `model` object (`history`, `input`, `output`). Controller functions mutate `model` and then call `render()`, which re-renders `Main` from scratch with `ReactDOM.render`.
-- Password generation: concatenates `masterPassword|siteName|userid|comment`, runs `scrypt` (N=2^19, r=8, p=1, dkLen=32), base64-encodes, strips non-alphanumerics, and takes the first 8 chars. Changing any of these parameters or the input format changes every generated password (see the "[Incompatible]" commit in history) — treat as a breaking change.
-- A quick "sample" check (scrypt with N=2^10, first 3 chars) is shown in green beside the master password field so the user can confirm they typed it correctly.
-- Master password and generated password are auto-cleared after `TIMEOUT_MS` (5 min) via a polling `clearPasswords` loop.
-- History (siteName/userid/comment, never passwords) is persisted in `localStorage["histories"]`.
-- Bookmarklet opens the app with `?url=...`; `getServiceName` uses publicsuffixlist.js + punycode to derive the registrable domain and prefill site name / matching history entry.
+- A single mutable `model` (`step`, `presets`, `filter`, `focus`, `input`, `output`). Controller functions mutate it and call `render()`. `window.scrypttest` exposes internals for the tests.
+- Wizard steps: `select` (choose/search/import/export presets, bookmarklet) → `params` (master password, site name, user id, comment, note, password rules) → `result` (progress, masked password, check emoji, copy).
+- Password generation: scrypt of `masterPassword|siteName|userid|comment` (NFC-normalized UTF-8, password = salt, N=2^19, r=8, p=1, dkLen=32+1024). The original password is the alphanumerics of base64 of the first 32 bytes, cut to 8 chars. `passwordFromKey` keeps that string (cut to the rule length) whenever it satisfies the rules, so default rules always reproduce the original passwords; otherwise `sampledPassword` draws characters from the remaining key bytes. The note and the rules are not part of the scrypt input.
+- Check emoji: scrypt with N=2^10 of the master password (and of the generated password), mapped to 3 of 64 emoji. Only for spotting typos.
+- Master and generated passwords show only while their field is focused, and are cleared 5 minutes after the last change/generation (`clearExpiredSecrets` polling loop).
+- Presets (site name, user id, comment, note, rules; keyed by site name+user id+comment) are stored in `localStorage["presets"]` in the same JSON format as the export file. The old `localStorage["histories"]` is migrated once and left in place.
+- The bookmarklet opens the app with `?url=...`; `startFromUrl` uses publicsuffixlist.js + punycode to derive the registrable domain and picks the matching preset.
 
-Some identifiers contain longstanding typos (`appendHisotry`, `applyHisotry`, `lastUpdateMasterPasword`, `passwordGeneatedAt`); keep them consistent rather than partially renaming.
+Vendored library notes: React 18.3.1 is the last release with UMD builds. scrypt-js 3 falls back to `setTimeout` (≈4ms clamp per step, very slow) without `setImmediate`, so keep `setImmediate.js`. publicsuffixlist.js stays on the old global-script version (3.x is an ES module only, and jsdom can't run module scripts). `var module = {}` before `punycode.js` absorbs its CommonJS export; `punycode` is a top-level `const`.

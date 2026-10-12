@@ -50,6 +50,7 @@ async function openApp({ html = "index.html", query = "", storage = {} } = {}) {
       // so provide a native setImmediate (the polyfill steps aside when one exists).
       window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {} });
       window.setImmediate = (fn, ...args) => setImmediate(() => fn(...args));
+      window.TextEncoder = TextEncoder;
       // jsdom has no fetch; serve local files only.
       window.fetch = async (u) => {
         const file = localPath(new URL(u, window.location.href).href);
@@ -67,7 +68,7 @@ async function openApp({ html = "index.html", query = "", storage = {} } = {}) {
   return { dom, window: dom.window, document: dom.window.document, blocked, errors };
 }
 
-async function waitFor(fn, { timeout = 120000, interval = 50 } = {}) {
+async function waitFor(fn, { timeout = 30000, interval = 20 } = {}) {
   const start = Date.now();
   for (;;) {
     const v = fn();

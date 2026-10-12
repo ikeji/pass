@@ -1,18 +1,17 @@
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
     <title>Scrypttest</title>
-    <link rel="stylesheet" href="./material.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="./style.css">
   </head>
   <body>
     <div class="contents">Loading...</div>
-    <script src="./material.min.js"></script>
-    <script src="./react.min.js"></script>
-    <script src="./react-dom.min.js"></script>
-    <script src="./buffer.js"></script>
+    <script src="./react.production.min.js"></script>
+    <script src="./react-dom.production.min.js"></script>
     <script src="./setImmediate.js"></script>
-    <script src="./unorm.js"></script>
     <script src="./scrypt.js"></script>
     <script src="./publicsuffixlist.min.js"></script>
     <script> var module = {}; </script>
@@ -41,18 +40,6 @@
   (syntax-template
     (define-function ~0 (prop)
       (return (react-html ~1-)))))
-  
-(define-macro define-react-component
-  (syntax-template
-    (var ~0 (React.createClass (object ~1-)))))
-
-(define-macro define-mdl-component
-  (syntax-template
-    (define-react-component ~0
-      componentDidMount (function ()
-        (window.componentHandler.upgradeElements
-          (ReactDOM.findDOMNode this)))
-      ~1-)))
 
 (define-macro now-msec
   (syntax-template (. (new Date) getTime)))
@@ -61,418 +48,796 @@
   (syntax-template
     (== 0 (. ~0 -length))))
 
-(// React wrapper for MDL )
 
-(define-react-template Spinner
-  (div ("className" "mdl-progress mdl-js-progress mdl-progress__indeterminate")))
+(// Password generation.
+    The scrypt input and the first 32 bytes of the key decide every password made
+    with the default rules. Changing them changes existing passwords.)
 
-(define-mdl-component TextInput
-  getDefaultProps (fn () (object id "a" label "label" value "" onChange (fn () undefined)))
-  componentDidUpdate (function (prevProp)
-    (when (!= this.inputRef document.activeElement)
-      (. (. (ReactDOM.findDOMNode this) -MaterialTextfield) change this.props.value)))
-  render (fn ()
-    (react-html (div (className "mdl-textfield mdl-js-textfield mdl-textfield--floating-label")
-      (input (className "mdl-textfield__input"
-              type "text"
-              id this.props.id
-              value this.props.value
-              onChange this.props.onChange
-              ref (. (function (c) (set! this.inputRef c)) bind this)))
-      (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
+(var GENERATE_N (<< 1 19))
+(var SAMPLE_N (<< 1 10))
+(var SAMPLE_LENGTH 3)
+(// Bytes after the first 32 are only used by sampledPassword.)
+(var KEY_LENGTH (+ 32 1024))
 
-(define-mdl-component Button
-  getDefaultProps (fn () (object
-    children "label"
-    onClick (fn (e) (e.preventDefault))
-    disabled false))
-  render (fn ()
-    (react-html
-      (button (className "mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored"
-               onClick this.props.onClick
-               disabled this.props.disabled)
-        this.props.children))))
+(var DIGITS "0123456789")
+(var UPPERS "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+(var LOWERS "abcdefghijklmnopqrstuvwxyz")
+(var SYMBOL_PATTERN "^[!-/:-@\\[-`{-~]$")
+(var DEFAULT_SYMBOLS "!#$%&*+-=?@^_")
+(var SYMBOL_MODES (list "none" "allow" "require"))
+(var MIN_LENGTH 4)
+(var MAX_LENGTH 64)
 
-(define-mdl-component RisedButton
-  getDefaultProps (fn () (object children "label" onClick (fn (e) (e.preventDefault))))
-  render (fn ()
-    (react-html
-      (button (className "mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect"
-               onClick this.props.onClick)
-        this.props.children))))
+(// 64 emoji, each a single code point, so a key byte maps to one with byte % 64.)
+(var EMOJI (Array.from "🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🐔🐧🐤🦆🦉🐴🦄🐝🐛🦋🐌🐞🐢🐍🐙🦀🐬🐳🐟🐘🦒🍎🍊🍋🍌🍉🍇🍓🍒🍑🍍🥝🥕🌽🍄🍞🧀🍔🍕🍩🍪🌵🌻🌙⭐🌈🔥🚀🎸"))
 
-(define-mdl-component FlatAccentButton
-  getDefaultProps (fn () (object children "label" onClick (fn (e) (e.preventDefault))))
-  render (fn ()
-    (react-html
-      (button (className "mdl-button mdl-js-button mdl-button--accent mdl-js-ripple-effect"
-               onClick this.props.onClick)
-        this.props.children))))
+(define-function utf8 (text)
+  (return (. (new TextEncoder) encode (. text normalize "NFC"))))
 
-(define-mdl-component ProgressBar
-  componentDidUpdate (function ()
-    (. (. (ReactDOM.findDOMNode this) -MaterialProgress) setProgress this.props.progress))
-  getDefaultProps (fn () (object progress 0))
-  render (fn () (react-html
-    (div (className "mdl-progress mdl-js-progress"
-          style (object "width" "300px"))))))
+(define-function base64 (bytes)
+  (return (btoa (. (Array.from bytes (fn (b) (String.fromCharCode b))) join ""))))
 
-(define-react-template MainTemplate
-  (div (className "mdl-layout mdl-js-layout mdl-layout--fixed-header")
-    (header (className "mdl-layout__header mdl-layout__header--scroll")
-      (div (className "mdl-layout__header-row")
-        (span (className "mdl-layout-title") "scrypt test")))
-    (div (style (object "width" "100%"
-                        "height" "30vh"
-                        "flexShrink" "0"
-                        "backgroundColor" "#3F51B5")))
-    (main (style (object "marginTop" "-30vh" "flexShrink" "0")
-           className "mdl-layout__content")
-      (div (style (object "maxWidth" "1600px" "width" "calc(100% - 16px)" "margin" "0 auto")
-            className "mdl-grid")
-        (div (className "mdl-cell mdl-cell--2-col mdl-cell--hide-tablet mdl-cell--hide-phone"))
-        (div (className "mdl-color--white mdl-shadow--4dp content mdl-color-text--grey-800 mdl-cell mdl-cell--8-col"
-              style (object "padding" "80px 56px" "borderRadius" "2px" "marginBottom" "80px"))
-          prop.children)))
-    (footer (className "mdl-mini-footer" style (object "flexShrink" "0"))
-      (div (className "mdl-mini-footer--left-section")
-        "Powered by"
-        (ul (className "mdl-mini-footer--link-list")
-          (li () (a (href "https://facebook.github.io/react/") "ReactJS"))
-          (li () (a (href "https://getmdl.io/") "Material design lite"))
-          (li () (a (href "https://github.com/ricmoo/scrypt-js") "scrypt-js"))
-          (li () (a (href "https://publicsuffix.org/") "Public suffix list"))
-          (li () (a (href "https://github.com/gorhill/publicsuffixlist.js") "publicsuffixlist.js"))
-          (li () (a (href "https://github.com/bestiejs/punycode.js") "punycode.js"))
-          (li () "jsise"))))))
+(define-function generationInput (input)
+  (return (+ input.masterPassword "|" input.siteName "|" input.userid "|" input.comment)))
 
-(define-mdl-component CopyableTextInput
-  getDefaultProps (fn () (object id "a" label "label" value ""))
-  componentDidUpdate (fn (prevProp)
-    (. (. (ReactDOM.findDOMNode this) -MaterialTextfield) change this.props.value))
-  onClick (function (e)
-    (e.target.select)
-    (document.execCommand "copy")
-    (e.preventDefault))
-  render (fn ()
-    (react-html (div (className "mdl-textfield mdl-js-textfield")
-      (input (className "mdl-textfield__input"
-              type "text"
-              id this.props.id
-              value this.props.value
-              onClick this.onClick
-              readOnly true))
-      (label (className "mdl-textfield__label" for this.props.id) this.props.label)))))
+(define-function defaultRules ()
+  (return (object
+    length 8
+    symbols "none"
+    symbolChars DEFAULT_SYMBOLS
+    requireDigit false
+    requireUpper false
+    requireLower false)))
 
-(define-react-template Table
-  (table (className "mdl-data-table mdl-js-data-table mdl-shadow--2dp")
-    prop.children))
+(define-function normalizeRules (raw)
+  (var d (defaultRules))
+  (when (or (not raw) (!= (typeof raw) "object"))
+    (return d))
+  (return (object
+    length (if (== (typeof raw.length) "number") raw.length d.length)
+    symbols (if (<= 0 (. SYMBOL_MODES indexOf raw.symbols)) raw.symbols d.symbols)
+    symbolChars (if (== (typeof raw.symbolChars) "string") raw.symbolChars d.symbolChars)
+    requireDigit (== raw.requireDigit true)
+    requireUpper (== raw.requireUpper true)
+    requireLower (== raw.requireLower true))))
 
-(define-react-template Th
-  (th (className "mdl-data-table__cell--non-numeric")
-    prop.children))
+(// Printable ASCII symbols of s, without duplicates, in their original order.)
+(define-function uniqueSymbols (s)
+  (var seen "")
+  (. (Array.from (|| s "")) forEach (function (c)
+    (when (and (re-match SYMBOL_PATTERN c) (< (. seen indexOf c) 0))
+      (set! seen (+ seen c)))))
+  (return seen))
 
-(define-react-template Td
-  (td (className "mdl-data-table__cell--non-numeric")
-    prop.children))
+(define-function symbolCharsOf (rules)
+  (return (if (== rules.symbols "none") "" (uniqueSymbols rules.symbolChars))))
+
+(define-function requiredSets (rules)
+  (var sets (list))
+  (when rules.requireDigit (. sets push DIGITS))
+  (when rules.requireUpper (. sets push UPPERS))
+  (when rules.requireLower (. sets push LOWERS))
+  (when (== rules.symbols "require") (. sets push (symbolCharsOf rules)))
+  (return sets))
+
+(define-function validateRules (rules)
+  (when (or (!= (typeof rules.length) "number")
+            (!= rules.length (Math.floor rules.length))
+            (< rules.length MIN_LENGTH)
+            (< MAX_LENGTH rules.length))
+    (return (+ "Length must be between " MIN_LENGTH " and " MAX_LENGTH ".")))
+  (when (and (!= rules.symbols "none") (empty? (uniqueSymbols rules.symbolChars)))
+    (return "Enter at least one symbol character."))
+  (return null))
+
+(define-function satisfiesRules (password rules)
+  (var allowed (+ DIGITS UPPERS LOWERS (symbolCharsOf rules)))
+  (var chars (Array.from password))
+  (var contains (fn (set) (. chars some (fn (c) (<= 0 (. set indexOf c))))))
+  (return (and (== chars.length rules.length)
+               (. chars every (fn (c) (<= 0 (. allowed indexOf c))))
+               (. (requiredSets rules) every contains))))
+
+(// Unbiased characters from the key bytes: one from each required set, the rest
+    from all allowed characters, then shuffled.)
+(define-function sampledPassword (bytes rules)
+  (var position 0)
+  (define-function nextIndex (n)
+    (var limit (- 256 (% 256 n)))
+    (while (< position bytes.length)
+      (var b (array-get bytes position))
+      (set! position (+ position 1))
+      (when (< b limit)
+        (return (% b n))))
+    (throw (new Error "Not enough key material.")))
+  (var all (+ DIGITS UPPERS LOWERS (symbolCharsOf rules)))
+  (var chars (. (requiredSets rules) map (fn (set) (. set charAt (nextIndex set.length)))))
+  (while (< chars.length rules.length)
+    (. chars push (. all charAt (nextIndex all.length))))
+  (for (var i (- chars.length 1)) (< 0 i) (set! i (- i 1))
+    (var j (nextIndex (+ i 1)))
+    (var t (array-get chars i))
+    (array-set! chars i (array-get chars j))
+    (array-set! chars j t))
+  (return (. chars join "")))
+
+(// The original password is the alphanumerics of base64(key[0..32]), cut to 8.
+    Whenever that string, cut to the requested length, satisfies the rules it is
+    used as is, so default rules always give the original password.)
+(define-function passwordFromKey (key rules)
+  (var legacy (. (base64 (. key slice 0 32)) replace (new RegExp "[^0-9a-zA-Z]" "g") ""))
+  (when (<= rules.length legacy.length)
+    (var candidate (. legacy substring 0 rules.length))
+    (when (satisfiesRules candidate rules)
+      (return candidate)))
+  (return (sampledPassword (. key slice 32) rules)))
+
+(define-function describeRules (rules)
+  (var symbols (uniqueSymbols rules.symbolChars))
+  (var parts (list (+ rules.length " chars")))
+  (. parts push
+    (cond
+      (== rules.symbols "allow") (+ "symbols allowed " symbols)
+      (== rules.symbols "require") (+ "symbols required " symbols)
+      "letters and digits"))
+  (var required (list))
+  (when rules.requireDigit (. required push "digit"))
+  (when rules.requireUpper (. required push "uppercase"))
+  (when rules.requireLower (. required push "lowercase"))
+  (when (< 0 required.length)
+    (. parts push (+ "must include " (. required join ", "))))
+  (return (. parts join " · ")))
+
+(define-function emojiFromKey (key count)
+  (return (. (. (Array.from (. key slice 0 count)) map (fn (b) (array-get EMOJI (% b 64)))) join "")))
+
+(// A short check value for a secret. Only meant for recognizing typos.)
+(define-function computeSample (text)
+  (var bytes (utf8 text))
+  (return (. (scrypt.scrypt bytes bytes SAMPLE_N 8 1 32) then (fn (key) (emojiFromKey key SAMPLE_LENGTH)))))
 
 
 (// Model for this app)
 
-(var NOT_GENERATED "(not generated yet)")
+(var TIMEOUT_MS (* (* 5 60) 1000))
+(var STORAGE_PRESETS "presets")
+(var STORAGE_LEGACY_HISTORY "histories")
+(var PRESET_FORMAT "scrypttest-presets")
+
+(define-function emptyOutput (token)
+  (return (object
+    token token
+    running false
+    progress 0
+    status ""
+    password ""
+    sample ""
+    generatedAt 0)))
 
 (var model (object
-  history (object
-    list (list)
-    visible true)
+  step "select"
+  presets (list)
+  filter ""
+  urlDomain ""
+  notice ""
+  focus (object master false password false)
   input (object
     masterPassword ""
-    sample ""
-    lastUpdateMasterPasword 0
+    masterSample ""
+    lastUpdateMasterPassword 0
     siteName ""
     userid ""
     comment ""
-    running false)
-  output (object
-    progress 0
-    status "initialied...."
-    passwordGeneatedAt 0
-    password NOT_GENERATED)))
+    note ""
+    rules (defaultRules))
+  output (emptyOutput 0)))
+
+
+(// Presets)
+
+(define-function readStorage (key)
+  (try ((return (window.localStorage.getItem key))) catch e ((return null))))
+
+(define-function writeStorage (key value)
+  (try ((window.localStorage.setItem key value)) catch e ((console.warn "Failed to save" e))))
+
+(define-function asString (value)
+  (return (if (== (typeof value) "string") value "")))
+
+(define-function hasPresetFields (p)
+  (return (not (and (empty? p.siteName) (empty? p.userid) (empty? p.comment)))))
+
+(define-function normalizePreset (raw)
+  (when (or (not raw) (!= (typeof raw) "object"))
+    (return null))
+  (return (object
+    siteName (asString raw.siteName)
+    userid (asString raw.userid)
+    comment (asString raw.comment)
+    note (asString raw.note)
+    rules (normalizeRules raw.rules))))
+
+(// Accepts the export format, or the plain array the old history used.)
+(define-function parsePresetList (data)
+  (var items (cond
+               (Array.isArray data) data
+               (and data (Array.isArray data.presets)) data.presets
+               null))
+  (when (not items)
+    (return null))
+  (return (. (. items map normalizePreset) filter (fn (p) (and p (hasPresetFields p))))))
+
+(// Presets that generate the same password share a key.)
+(define-function presetKey (p)
+  (return (JSON.stringify (list p.siteName p.userid p.comment))))
+
+(define-function presetsJson ()
+  (return (JSON.stringify (object format PRESET_FORMAT version 1 presets model.presets) null 2)))
+
+(define-function savePresets ()
+  (writeStorage STORAGE_PRESETS (presetsJson)))
+
+(define-function loadPresets ()
+  (var stored (readStorage STORAGE_PRESETS))
+  (var source (if (== stored null) (readStorage STORAGE_LEGACY_HISTORY) stored))
+  (var parsed null)
+  (try ((set! parsed (parsePresetList (JSON.parse (|| source "[]"))))) catch e ((set! parsed null)))
+  (set! model.presets (|| parsed (list)))
+  (when (and (== stored null) (< 0 model.presets.length))
+    (savePresets)))
+
+(define-function upsertPreset (p)
+  (set! model.presets
+    (. (list p) concat
+       (. model.presets filter (fn (e) (!= (presetKey e) (presetKey p))))))
+  (savePresets))
+
+(define-function presetFromInput ()
+  (return (normalizePreset model.input)))
+
+(define-function savePresetFromInput ()
+  (when (or (not (hasPresetFields model.input)) (validateRules model.input.rules))
+    (return false))
+  (upsertPreset (presetFromInput))
+  (return true))
+
+(define-function savePresetWithNotice ()
+  (when (savePresetFromInput)
+    (notify "Preset saved.")))
+
+(define-function removePreset (p)
+  (when (not (window.confirm (+ "Delete the preset for " (|| p.siteName "(no site name)") "?")))
+    (return false))
+  (set! model.presets (. model.presets filter (fn (e) (not (=== e p)))))
+  (savePresets)
+  (render))
+
+(// Imported presets replace ones with the same key; new ones are appended.)
+(define-function mergePresets (imported)
+  (var byKey (object))
+  (. imported forEach (function (p) (array-set! byKey (presetKey p) p)))
+  (var existing (object))
+  (. model.presets forEach (function (p) (array-set! existing (presetKey p) true)))
+  (var updated (. model.presets map (fn (p) (|| (array-get byKey (presetKey p)) p))))
+  (var added (. imported filter (fn (p)
+    (and (not (array-get existing (presetKey p)))
+         (=== (array-get byKey (presetKey p)) p)))))
+  (set! model.presets (. updated concat added))
+  (savePresets))
+
+(define-function importPresetsText (text)
+  (var parsed (parsePresetList (JSON.parse text)))
+  (when (not parsed)
+    (throw (new Error "Unrecognized file.")))
+  (mergePresets parsed)
+  (render)
+  (return parsed.length))
+
+(define-function importPresetsFromEvent (e)
+  (var fileInput e.target)
+  (var file (array-get fileInput.files 0))
+  (when (not file)
+    (return false))
+  (. (. (file.text) then (fn (text)
+       (notify (+ "Imported " (importPresetsText text) " presets."))))
+     catch (fn (error) (notify (+ "Import failed: " error.message))))
+  (set! fileInput.value ""))
+
+(define-function exportPresets ()
+  (var blob (new Blob (list (presetsJson)) (object type "application/json")))
+  (var a (document.createElement "a"))
+  (set! a.href (URL.createObjectURL blob))
+  (set! a.download "scrypttest-presets.json")
+  (document.body.appendChild a)
+  (a.click)
+  (a.remove)
+  (setTimeout (fn () (URL.revokeObjectURL a.href)) 1000))
+
+(define-function filteredPresets (m)
+  (var q (. (. m.filter trim) toLowerCase))
+  (when (empty? q)
+    (return m.presets))
+  (return (. m.presets filter (fn (p)
+    (<= 0 (. (. (. (list p.siteName p.userid p.comment p.note) join "\n") toLowerCase) indexOf q))))))
+
 
 (// Controller for this app)
 
-(define-function updateMasterPassword (masterPassword)
-  (set! model.input.masterPassword masterPassword)
-  (set! model.input.lastUpdateMasterPasword (now-msec))
-  (updateSample)
-  (render))
+(define-function noop () (return undefined))
 
-(define-function updateSample ()
-  (var input model.input.masterPassword)
-  (ifs (!= input "") (
-    (var inputbuf (new buffer.Buffer (input.normalize) "utf8"))
-    (scrypt inputbuf inputbuf (<< 1 10) 8 1 32 (function (error progress key)
-      (when key
-        (var keybuf (new buffer.Buffer key))
-        (var keybase64 (. keybuf toString "base64"))
-        (var keynospecial
-            (. keybase64 replace (new RegExp "[^0-9a-zA-Z]" "g") ""))
-        (var sample (. keynospecial substring 0 3))
-        (set! model.input.sample sample)
-        (render)
-        (return false)))))
-    ((set! model.input.sample ""))))
-
-(var TIMEOUT_MS (* (* 5 60) 1000))
-
-(define-function clearPasswords ()
-  (when (and (!= model.input.masterPassword "")
-             (< (+ model.input.lastUpdateMasterPasword TIMEOUT_MS) (now-msec)))
-    (updateMasterPassword ""))
-  (when (and (!= model.output.password NOT_GENERATED)
-             (< (+ model.output.passwordGeneatedAt TIMEOUT_MS) (now-msec)))
-    (set! model.output.password NOT_GENERATED)
-    (render))
-  (setTimeout clearPasswords 1000))
-(clearPasswords)
-
-(define-function generate (e)
-  (e.preventDefault)
-  (when (empty? model.input.masterPassword)
-    (return false))
-  (when model.input.running
-    (return false))
-  (set! model.input.running true)
-  (set! model.output.status "generating")
-  (set! model.output.password NOT_GENERATED)
-  (appendHisotry model.input)
+(define-function notify (text)
+  (set! model.notice text)
   (render)
-
-  (var input (+ model.input.masterPassword "|"
-                model.input.siteName "|"
-                model.input.userid "|"
-                model.input.comment))
-  (console.log (+ "target text: " input))
-  (var inputbuf (Array.from (new buffer.Buffer (input.normalize) "utf8")))
-  (var starttime (now-msec))
   (setTimeout (function ()
-    (scrypt inputbuf inputbuf (<< 1 19) 8 1 32 (function (error progress key)
-      (when (not model.input.running)
-         (return true))
-      (when error
-        (set! model.input.running false)
-        (set! model.output.status error)
-        (render)
-        (return false))
-      (when key
-        (set! model.input.running false)
-        (set! model.output.status (+ "Success (" (/ (- (now-msec) starttime) 1000) "sec)"))
-        (var keybuf (new buffer.Buffer key))
-        (var keybase64 (. keybuf toString "base64"))
-        (var keynospecial
-            (. keybase64 replace (new RegExp "[^0-9a-zA-Z]" "g") ""))
-        (var pass (. keynospecial substring 0 8))
-        (set! model.output.password pass)
-        (set! model.output.passwordGeneatedAt (now-msec))
-        (render)
-        (return false))
-      (when progress
-        (set! model.output.status (+ (. (Math.floor (* progress 100)) toString) "% done."))
-        (set! model.output.progress (Math.floor (* progress 100)))
-        (render))))) 100))
+    (when (== model.notice text)
+      (set! model.notice "")
+      (render))) 2500))
 
-(define-function cancel (e)
-  (e.preventDefault)
-  (set! model.input.running false)
-  (set! model.output.status "Cancelled")
+(define-function goTo (step)
+  (set! model.step step)
+  (set! model.focus.password false)
+  (render)
+  (window.scrollTo 0 0))
+
+(define-function setInput (key value)
+  (array-set! model.input key value)
   (render))
 
+(define-function setRule (key value)
+  (array-set! model.input.rules key value)
+  (render))
 
-(define-function loadHistory ()
-  (set! model.history.list (JSON.parse (||
-            (window.localStorage.getItem "histories")
-            "[]")))
-  (when (== 0 model.history.list.length)
-    (set! model.history.visible false)))
+(define-function parseLength (text)
+  (var n (parseInt text 10))
+  (return (if (isNaN n) "" n)))
 
-(loadHistory)
+(define-function setFilter (value)
+  (set! model.filter value)
+  (render))
 
-(define-function getServiceName ()
-  (var thisUrl (new URL location.href))
-  (when (not (. thisUrl.searchParams has "url"))
-    (return null))
-  (set! model.history.visible false)
-  (var targetUrl (new URL (. thisUrl.searchParams get "url")))
-  (. (. (fetch "public_suffix_list.dat") then (fn (r) (r.text))) then (function (list)
-    (publicSuffixList.parse list punycode.toASCII)
-    (var domain (publicSuffixList.getDomain targetUrl.host))
-    (set! model.input.siteName domain)
-    (var candidates
-      (. model.history.list filter (fn (i)
-        (== i.siteName domain))))
-    (when (< 0 candidates.length)
-      (var c (first candidates))
-      (set! model.input.userid c.userid)
-      (set! model.input.comment c.comment))
-    (when (< 1 candidates.length)
-      (set! model.history.visible true))
-    (render))))
+(define-function setFocus (name value)
+  (array-set! model.focus name value)
+  (render))
 
-(getServiceName)
+(define-function updateMasterPassword (value)
+  (set! model.input.masterPassword value)
+  (set! model.input.lastUpdateMasterPassword (now-msec))
+  (set! model.input.masterSample "")
+  (render)
+  (when (not (empty? value))
+    (. (computeSample value) then (function (sample)
+      (when (== model.input.masterPassword value)
+        (set! model.input.masterSample sample)
+        (render))))))
 
-(define-function saveHistory ()
-  (window.localStorage.setItem
-    "histories"
-    (JSON.stringify model.history.list)))
+(define-function fillInput (p)
+  (set! model.input.siteName p.siteName)
+  (set! model.input.userid p.userid)
+  (set! model.input.comment p.comment)
+  (set! model.input.note p.note)
+  (set! model.input.rules (normalizeRules p.rules)))
 
-(define-function appendHisotry (n)
-  (when (and (empty? n.siteName)
-             (empty? n.userid)
-             (empty? n.comment))
+(define-function startNew ()
+  (fillInput (object siteName model.urlDomain userid "" comment "" note "" rules (defaultRules)))
+  (goTo "params"))
+
+(define-function selectPreset (p)
+  (fillInput p)
+  (goTo "params"))
+
+(define-function clearOutput ()
+  (set! model.output (emptyOutput (+ model.output.token 1))))
+
+(define-function backToParams ()
+  (clearOutput)
+  (goTo "params"))
+
+(define-function startOver ()
+  (clearOutput)
+  (goTo "select"))
+
+(define-function canGenerate (m)
+  (return (and (not (empty? m.input.masterPassword))
+               (not (validateRules m.input.rules))
+               (not m.output.running))))
+
+(define-function generate ()
+  (when (not (canGenerate model))
     (return false))
-  (set! model.history.list
-    (. model.history.list filter (fn (e)
-      (not (and (== e.siteName n.siteName)
-                (== e.userid n.userid)
-                (== e.comment n.comment))))))
-  (. model.history.list unshift
-    (object siteName model.input.siteName
-            userid model.input.userid
-            comment model.input.comment))
-  (saveHistory))
+  (savePresetFromInput)
+  (var token (+ model.output.token 1))
+  (var rules (normalizeRules model.input.rules))
+  (var source (utf8 (generationInput model.input)))
+  (set! model.output (emptyOutput token))
+  (set! model.output.running true)
+  (set! model.output.status "Generating...")
+  (goTo "result")
+  (var startTime (now-msec))
+  (var lastPercent 0)
+  (// Let the result page render before scrypt starts.)
+  (setTimeout (function ()
+    (when (!= token model.output.token)
+      (return false))
+    (. (. (scrypt.scrypt source source GENERATE_N 8 1 KEY_LENGTH
+            (function (progress)
+              (when (!= token model.output.token)
+                (return true))
+              (var percent (Math.floor (* progress 100)))
+              (when (!= percent lastPercent)
+                (set! lastPercent percent)
+                (set! model.output.progress percent)
+                (set! model.output.status (+ "Generating... " percent "%"))
+                (render))
+              (return false)))
+          then (function (key)
+            (when (!= token model.output.token)
+              (return false))
+            (var password (passwordFromKey key rules))
+            (set! model.output.running false)
+            (set! model.output.progress 100)
+            (set! model.output.status (+ "Done (" (/ (- (now-msec) startTime) 1000) " sec)"))
+            (set! model.output.password password)
+            (set! model.output.generatedAt (now-msec))
+            (render)
+            (return (. (computeSample password) then (function (sample)
+              (when (and (== token model.output.token) (== model.output.password password))
+                (set! model.output.sample sample)
+                (render)))))))
+       catch (function (error)
+         (when (!= token model.output.token)
+           (return false))
+         (set! model.output.running false)
+         (set! model.output.status (+ "Error: " error.message))
+         (render)))) 50))
+
+(define-function cancel ()
+  (when model.output.running
+    (set! model.output.token (+ model.output.token 1))
+    (set! model.output.running false)
+    (set! model.output.status "Cancelled.")
+    (render)))
+
+(define-function copyWithSelection (text)
+  (var area (document.createElement "textarea"))
+  (set! area.value text)
+  (area.setAttribute "readonly" "")
+  (set! area.style.position "fixed")
+  (set! area.style.opacity "0")
+  (document.body.appendChild area)
+  (area.select)
+  (var ok false)
+  (try ((set! ok (document.execCommand "copy"))) catch e ((set! ok false)))
+  (area.remove)
+  (return ok))
+
+(define-function copyPassword ()
+  (var text model.output.password)
+  (when (empty? text)
+    (return false))
+  (ifs (and navigator.clipboard navigator.clipboard.writeText) (
+    (. (. (navigator.clipboard.writeText text) then (fn () (notify "Copied.")))
+       catch (fn () (notify (if (copyWithSelection text) "Copied." "Copy failed."))))
+  ) (
+    (notify (if (copyWithSelection text) "Copied." "Copy failed."))
+  )))
+
+(define-function clearExpiredSecrets ()
+  (var now (now-msec))
+  (when (and (not (empty? model.input.masterPassword))
+             (< (+ model.input.lastUpdateMasterPassword TIMEOUT_MS) now))
+    (updateMasterPassword ""))
+  (when (and (not (empty? model.output.password))
+             (< (+ model.output.generatedAt TIMEOUT_MS) now))
+    (set! model.output.password "")
+    (set! model.output.sample "")
+    (set! model.output.status "Cleared after 5 minutes.")
+    (render))
+  (setTimeout clearExpiredSecrets 1000))
+
+(// Opened from the bookmarklet with ?url=: pick the preset for that site.)
+(define-function startFromUrl ()
+  (var params (. (new URL window.location.href) -searchParams))
+  (when (not (params.has "url"))
+    (return null))
+  (var target null)
+  (try ((set! target (new URL (params.get "url")))) catch e ((return null)))
+  (when (not target.hostname)
+    (return null))
+  (return (. (. (. (fetch "public_suffix_list.dat") then (fn (r) (r.text))) then (function (text)
+    (publicSuffixList.parse text punycode.toASCII)
+    (var domain (|| (publicSuffixList.getDomain target.hostname) target.hostname))
+    (set! model.urlDomain domain)
+    (var matches (. model.presets filter (fn (p) (== p.siteName domain))))
+    (when (== matches.length 0)
+      (return (startNew)))
+    (when (== matches.length 1)
+      (return (selectPreset (first matches))))
+    (setFilter domain)))
+    catch (fn (error) (console.warn "Failed to read the site from the URL" error)))))
 
 
-(define-function applyHisotry (e)
-  (set! model.input.siteName e.siteName)
-  (set! model.input.userid e.userid)
-  (set! model.input.comment e.comment)
-  (render))
+(// Components for this app)
 
-(define-function removeHistory (e)
-  (set! model.history.list
-    (. model.history.list filter
-            (fn (el) (not (=== e el)))))
-  (saveHistory)
-  (render))
+(var STEPS (list (list "select" "Preset") (list "params" "Parameters") (list "result" "Password")))
 
+(define-react-template Steps
+  (ol (className "steps")
+    (, . STEPS map (fn (s i)
+      (react-html
+        (li (key (first s)
+             className (if (== (first s) prop.step) "active" "")
+             "aria-current" (if (== (first s) prop.step) "step" undefined))
+          (span (className "num") (, + i 1))
+          (span (className "label") (, second s))))))))
 
-(// Component for this app )
+(define-react-template Field
+  (div (className "field")
+    (label (className "field-label" htmlFor prop.htmlFor) prop.label)
+    prop.children
+    (, if prop.hint (react-html (div (className "field-hint") prop.hint)) null)))
 
-(define-react-template Main (MainTemplate ()
-  (HistoryList (history prop.model.history))
-  (PasswordInput (input prop.model.input))
-  (ResultPanel (output prop.model.output))
-  (Bookmarklet ())
-  (TODO ())))
+(define-react-template TextField
+  (Field (label prop.label htmlFor prop.id hint prop.hint)
+    (input (id prop.id
+            className "input"
+            type "text"
+            value prop.value
+            onChange prop.onChange
+            autoComplete "off"
+            autoCapitalize "off"
+            autoCorrect "off"
+            spellCheck false))))
 
+(// Shows its value only while focused.)
+(define-react-template SecretInput
+  (input (id prop.id
+          className "input secret"
+          type (if prop.focused "text" "password")
+          value prop.value
+          readOnly (|| prop.readOnly false)
+          autoComplete "off"
+          autoCapitalize "off"
+          autoCorrect "off"
+          spellCheck false
+          onFocus (fn (e) (prop.onFocusChange true e))
+          onBlur (fn (e) (prop.onFocusChange false e))
+          onChange (|| prop.onChange noop))))
 
-(define-react-template HistoryListItem
-  (tr ()
-    (td () (RisedButton (onClick (fn () (applyHisotry prop.item))) "Use"))
-    (Td ()
-      (div () prop.item.siteName)
-      (div () prop.item.userid)
-      (div () prop.item.comment))
-    (td () (FlatAccentButton (onClick (fn () (removeHistory prop.item))) "×"))))
+(define-react-template Check
+  (label (className "check")
+    (input (type "checkbox"
+            id prop.id
+            checked prop.checked
+            onChange (fn (e) (setRule prop.id e.target.checked))))
+    (span () prop.label)))
 
-(define-react-template HistoryListTable
+(define-react-template PresetItem
+  (li (className "preset")
+    (button (className "preset-main" type "button" onClick (fn () (selectPreset prop.preset)))
+      (span (className "preset-site") (, || prop.preset.siteName "(no site name)"))
+      (, if prop.preset.userid (react-html (span (className "preset-user") prop.preset.userid)) null)
+      (, if prop.preset.comment (react-html (span (className "preset-comment") prop.preset.comment)) null)
+      (, if prop.preset.note (react-html (span (className "preset-note") prop.preset.note)) null)
+      (span (className "preset-rules") (, describeRules prop.preset.rules)))
+    (button (className "button icon danger"
+             type "button"
+             title "Delete"
+             "aria-label" "Delete preset"
+             onClick (fn () (removePreset prop.preset)))
+      "×")))
+
+(define-react-template PresetList
   (div ()
-    (h4 () "History")
-    (table (className "mdl-data-table mdl-js-data-table mdl-shadow--2dp")
-      (thead ()
-        (tr ()
-          (th ())
-          (Th ()
-            (div (style (object "lineHeight" 1)) "Site name")
-            (div (style (object "lineHeight" 1)) "User id")
-            (div (style (object "lineHeight" 1)) "Comment"))
-          (th ())))
-      (tbody ()
-        (, . prop.history.list map (fn (i) 
-              (react-html (HistoryListItem (item i)))))))))
-
-(define-react-template HistoryList
-   (div ()
-     (, if (and prop.history.visible
-                (not (empty? prop.history.list)))
-       (react-html (HistoryListTable (history prop.history)))
-       (list))))
-
-(define-react-template PasswordInput
-  (form (action "#")
-    (h4 () "Input seeds")
-    (TextInput (id "pass"
-                label "master password"
-                value prop.input.masterPassword
-                onChange (function (e) (updateMasterPassword e.target.value))))
-    (span (style (object "color" "green")) prop.input.sample)
-    (br ())
-    (TextInput (id "sitename"
-                label "Site name"
-                value prop.input.siteName
-                onChange (function (e) (. prop.input -siteName e.target.value) (render))))
-    (br ())
-    (TextInput (id "userid"
-                label "User id"
-                value prop.input.userid
-                onChange (function (e) (. prop.input -userid e.target.value) (render))))
-    (br ())
-    (TextInput (id "comment"
-                label "Comment"
-                value prop.input.comment
-                onChange (function (e) (. prop.input -comment e.target.value) (render))))
-    (br ())
-    (Button (onClick (if (not prop.input.running) generate cancel)
-             disabled (empty? prop.input.masterPassword))
-      (, if (not prop.input.running) "generate" "cancel"))))
-
-(define-react-template ResultPanel
-  (div ()
-    (h4 () "status")
-    (div () prop.output.status)
-    (ProgressBar (progress prop.output.progress))
-    (h4 () "password")
-    (div ()
-      (CopyableTextInput (id "result"
-                          label "password"
-                          value prop.output.password)))))
+    (input (className "input search"
+            type "search"
+            placeholder "Search presets"
+            "aria-label" "Search presets"
+            value prop.model.filter
+            onChange (fn (e) (setFilter e.target.value))))
+    (ul (className "presets")
+      (, . (filteredPresets prop.model) map (fn (p)
+        (react-html (PresetItem (key (presetKey p) preset p))))))))
 
 (define-react-template Bookmarklet
-  (div ()
-    (h4 () "Bookmarklet")
-    "Drag this link to bookmark bar : "
-    (a (href "javascript:void(function(){window.open('https://pass.ikeji.ma/?url='+encodeURIComponent(location.href));})()"
-        onClick (fn (e) (e.preventDefault)))
-      "Generate Password")))
+  (details (className "section")
+    (summary () "Bookmarklet")
+    (p ()
+      "Drag this link to the bookmark bar: "
+      (a (href "javascript:void(function(){window.open('https://pass.ikeji.ma/?url='+encodeURIComponent(location.href));})()"
+          onClick (fn (e) (e.preventDefault)))
+        "Generate Password"))))
 
-(define-react-template TODO
+(define-react-template SelectStep
   (div ()
-    (h4 () "TODOs")
-    (ul ()
-      (li () "Web notification when done.")
-      (li () "Auto hide password when lost focus.")
-      (li () "Use icon for sample check.")
-      (li () "Save&Load history.")
-      (li () "Fix style sheet.")
-      (li () "")
-    )
-    (h4 () "DONE")
-    (ul ()
-      (li () "Timeout work for result.")
-      (li () "Store history to local storage.")
-      (li () "Copy API")
-      (li () "Timeout work")
-    )))
-     
+    (h2 () "Choose a preset")
+    (div (className "actions")
+      (button (className "button primary" type "button" onClick startNew) "New"))
+    (, if (empty? prop.model.presets)
+      (react-html (p (className "muted") "No presets yet. Presets are saved when you generate a password."))
+      (react-html (PresetList (model prop.model))))
+    (details (className "section")
+      (summary () "Import / export presets")
+      (div (className "actions")
+        (button (className "button"
+                 type "button"
+                 onClick exportPresets
+                 disabled (empty? prop.model.presets))
+          "Export")
+        (label (className "button")
+          "Import"
+          (input (className "visually-hidden"
+                  type "file"
+                  accept "application/json,.json"
+                  onChange importPresetsFromEvent)))))
+    (Bookmarklet ())))
+
+(define-function RulesEditor (prop)
+  (var rules prop.rules)
+  (return (react-html
+    (details (className "section")
+      (summary ()
+        "Password rules"
+        (span (className "rules-summary") (, describeRules rules)))
+      (Field (label "Length" htmlFor "length" hint (+ MIN_LENGTH "–" MAX_LENGTH " characters"))
+        (input (id "length"
+                className "input"
+                type "number"
+                inputMode "numeric"
+                min MIN_LENGTH
+                max MAX_LENGTH
+                value rules.length
+                onChange (fn (e) (setRule "length" (parseLength e.target.value))))))
+      (Field (label "Symbols" htmlFor "symbols")
+        (select (id "symbols"
+                 className "input"
+                 value rules.symbols
+                 onChange (fn (e) (setRule "symbols" e.target.value)))
+          (option (value "none") "Don't use")
+          (option (value "allow") "Allow")
+          (option (value "require") "Require")))
+      (, if (== rules.symbols "none")
+        null
+        (react-html
+          (TextField (id "symbolChars"
+                      label "Symbol characters"
+                      hint "Printable ASCII symbols the site accepts."
+                      value rules.symbolChars
+                      onChange (fn (e) (setRule "symbolChars" e.target.value))))))
+      (div (className "checks")
+        (Check (id "requireDigit" label "Require a digit" checked rules.requireDigit))
+        (Check (id "requireUpper" label "Require an uppercase letter" checked rules.requireUpper))
+        (Check (id "requireLower" label "Require a lowercase letter" checked rules.requireLower)))))))
+
+(define-function ParamsStep (prop)
+  (var input prop.model.input)
+  (var error (validateRules input.rules))
+  (return (react-html
+    (form (noValidate true onSubmit (function (e) (e.preventDefault) (generate)))
+      (h2 () "Parameters")
+      (Field (label "Master password" htmlFor "master")
+        (div (className "with-sample")
+          (SecretInput (id "master"
+                        value input.masterPassword
+                        focused prop.model.focus.master
+                        onFocusChange (fn (focused) (setFocus "master" focused))
+                        onChange (fn (e) (updateMasterPassword e.target.value))))
+          (span (className "sample master-sample" title "Check emoji for the master password")
+            input.masterSample)))
+      (TextField (id "siteName"
+                  label "Site name"
+                  value input.siteName
+                  onChange (fn (e) (setInput "siteName" e.target.value))))
+      (TextField (id "userid"
+                  label "User id"
+                  value input.userid
+                  onChange (fn (e) (setInput "userid" e.target.value))))
+      (TextField (id "comment"
+                  label "Comment"
+                  hint "Used for generation. Change it to get a different password."
+                  value input.comment
+                  onChange (fn (e) (setInput "comment" e.target.value))))
+      (Field (label "Note" htmlFor "note" hint "Not used for generation.")
+        (textarea (id "note"
+                   className "input"
+                   rows 3
+                   value input.note
+                   onChange (fn (e) (setInput "note" e.target.value)))))
+      (RulesEditor (rules input.rules))
+      (, if error (react-html (p (className "error" role "alert") error)) null)
+      (div (className "actions")
+        (button (className "button" type "button" onClick (fn () (goTo "select"))) "Back")
+        (button (className "button"
+                 type "button"
+                 onClick savePresetWithNotice
+                 disabled (or (not (hasPresetFields input)) (Boolean error)))
+          "Save preset")
+        (button (className "button primary"
+                 type "submit"
+                 disabled (not (canGenerate prop.model)))
+          "Generate"))))))
+
+(define-function ResultStep (prop)
+  (var out prop.model.output)
+  (var input prop.model.input)
+  (return (react-html
+    (div ()
+      (h2 () "Password")
+      (p (className "muted")
+        (, . (. (list input.siteName input.userid input.comment) filter Boolean) join " · "))
+      (div (className "status" role "status") out.status)
+      (progress (className "progress" max 100 value out.progress))
+      (, if (empty? out.password)
+        null
+        (react-html
+          (div ()
+            (Field (label "Password" htmlFor "password" hint "Shown while focused. Cleared 5 minutes after generation.")
+              (div (className "with-sample")
+                (SecretInput (id "password"
+                              value out.password
+                              readOnly true
+                              focused prop.model.focus.password
+                              onFocusChange (function (focused e)
+                                (setFocus "password" focused)
+                                (when focused
+                                  (var target e.target)
+                                  (setTimeout (fn () (target.select)) 0)))))
+                (span (className "sample password-sample" title "Check emoji for the generated password")
+                  out.sample)))
+            (button (className "button primary" type "button" onClick copyPassword) "Copy"))))
+      (div (className "actions")
+        (, if out.running
+          (react-html (button (className "button" type "button" onClick cancel) "Cancel"))
+          (react-html (button (className "button" type "button" onClick backToParams) "Back")))
+        (button (className "button" type "button" onClick startOver) "Done"))))))
+
+(define-react-template Footer
+  (footer (className "footer")
+    "Powered by "
+    (a (href "https://react.dev/") "React") ", "
+    (a (href "https://github.com/ricmoo/scrypt-js") "scrypt-js") ", "
+    (a (href "https://publicsuffix.org/") "Public suffix list") ", "
+    (a (href "https://github.com/gorhill/publicsuffixlist.js") "publicsuffixlist.js") ", "
+    (a (href "https://github.com/mathiasbynens/punycode.js") "punycode.js") " and jsise."))
+
+(define-react-template App
+  (div (className "app")
+    (header (className "topbar")
+      (h1 () "scrypt test"))
+    (Steps (step prop.model.step))
+    (main (className "card")
+      (, cond
+        (== prop.model.step "select") (react-html (SelectStep (model prop.model)))
+        (== prop.model.step "params") (react-html (ParamsStep (model prop.model)))
+        (react-html (ResultStep (model prop.model)))))
+    (, if prop.model.notice
+      (react-html (div (className "notice" role "status") prop.model.notice))
+      null)
+    (Footer ())))
+
 
 (// Entry point )
-(define-function render ()
-  (ReactDOM.render (react-html (Main (model model)))
-    (get-element-by-class "contents")))
+(var root (ReactDOM.createRoot (get-element-by-class "contents")))
 
-(. window -render render)
-(. window -model model)
+(define-function render ()
+  (root.render (react-html (App (model model)))))
+
+(// Used by the tests.)
+(. window -scrypttest (object
+  model model
+  render render
+  passwordFromKey passwordFromKey
+  satisfiesRules satisfiesRules
+  validateRules validateRules
+  defaultRules defaultRules
+  emojiFromKey emojiFromKey
+  EMOJI EMOJI
+  importPresetsText importPresetsText
+  presetsJson presetsJson))
+
+(loadPresets)
 (render)
+(startFromUrl)
+(clearExpiredSecrets)
 
     </script>
     <script src="./jsise.js"></script>

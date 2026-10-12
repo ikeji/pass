@@ -1,0 +1,251 @@
+[
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 12
+    },
+    "password": "SDxz125t2vpW"
+  },
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 16,
+      "symbols": "require"
+    },
+    "password": "LNbN#bQBA*$CDyy%"
+  },
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 10,
+      "requireDigit": true,
+      "requireUpper": true,
+      "requireLower": true
+    },
+    "password": "SDxz125t2v"
+  },
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 20,
+      "symbols": "allow",
+      "symbolChars": "-_."
+    },
+    "password": "SDxz125t2vpWAmpDvaie"
+  },
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 4,
+      "symbols": "require",
+      "symbolChars": "!",
+      "requireDigit": true,
+      "requireUpper": true,
+      "requireLower": true
+    },
+    "password": "!l0L"
+  },
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 64,
+      "symbols": "allow"
+    },
+    "password": "tJ1Q72N!BX4y!MeG=#wRNOu#jA2iN4&1b$V6*uQrMANS3czCRDM-T=t1yub*LOJY"
+  },
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "rules": {
+      "length": 8,
+      "requireDigit": true
+    },
+    "password": "SDxz125t"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 12
+    },
+    "password": "W4lmnoNeLEd2"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 16,
+      "symbols": "require"
+    },
+    "password": "rRoG*PMBAtfL6q*S"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 10,
+      "requireDigit": true,
+      "requireUpper": true,
+      "requireLower": true
+    },
+    "password": "W4lmnoNeLE"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 20,
+      "symbols": "allow",
+      "symbolChars": "-_."
+    },
+    "password": "W4lmnoNeLEd2oxq5eDFR"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 4,
+      "symbols": "require",
+      "symbolChars": "!",
+      "requireDigit": true,
+      "requireUpper": true,
+      "requireLower": true
+    },
+    "password": "!bW7"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 64,
+      "symbols": "allow"
+    },
+    "password": "o%xdf+PJnLc^R?Q@OrRkaB2GqPISPhlUv9PL&tYj6iUx*A-5^BMTgbIP*WA3Vr*R"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "rules": {
+      "length": 8,
+      "requireDigit": true
+    },
+    "password": "W4lmnoNe"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 12
+    },
+    "password": "BBbwFoWPijop"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 16,
+      "symbols": "require"
+    },
+    "password": "g=%&_&s7E%4t_E+="
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 10,
+      "requireDigit": true,
+      "requireUpper": true,
+      "requireLower": true
+    },
+    "password": "J4Y77lUN64"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 20,
+      "symbols": "allow",
+      "symbolChars": "-_."
+    },
+    "password": "BBbwFoWPijopMrZu5Q3J"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 4,
+      "symbols": "require",
+      "symbolChars": "!",
+      "requireDigit": true,
+      "requireUpper": true,
+      "requireLower": true
+    },
+    "password": "!7Nl"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 64,
+      "symbols": "allow"
+    },
+    "password": "Yz+i4PORd46tZGJEK_25m-g_4Ee=p&HH%K6mVW&!m9m7RfpG=Ep2$sWvTRoiF163"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "rules": {
+      "length": 8,
+      "requireDigit": true
+    },
+    "password": "JYRJ47U7"
+  }
+]
