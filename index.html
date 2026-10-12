@@ -55,21 +55,65 @@
 
 (var GENERATE_N (<< 1 19))
 (var SAMPLE_N (<< 1 10))
-(var SAMPLE_LENGTH 3)
 (// Bytes after the first 32 are only used by sampledPassword.)
 (var KEY_LENGTH (+ 32 1024))
 
 (var DIGITS "0123456789")
 (var UPPERS "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 (var LOWERS "abcdefghijklmnopqrstuvwxyz")
-(var SYMBOL_PATTERN "^[!-/:-@\\[-`{-~]$")
-(var DEFAULT_SYMBOLS "!#$%&*+-=?@^_")
-(var SYMBOL_MODES (list "none" "allow" "require"))
-(var MIN_LENGTH 4)
-(var MAX_LENGTH 64)
+(var SYMBOLS "!#$%&*+-=?@^_")
+
+(// The rules a password can follow. Users pick one by id, so an id and its rules
+    must never change once released; only add new ones.
+    rules: length, symbols ("none" or "require"), requireDigit/Upper/Lower.)
+(var RULE_OPTIONS (list
+  (object id "alnum8"
+          label "8 letters and digits (original)"
+          rules (object length 8 symbols "none"))
+  (object id "mixed8"
+          label "8 with uppercase, lowercase and digit"
+          rules (object length 8 symbols "none" requireDigit true requireUpper true requireLower true))
+  (object id "mixed12"
+          label "12 with uppercase, lowercase and digit"
+          rules (object length 12 symbols "none" requireDigit true requireUpper true requireLower true))
+  (object id "symbol8"
+          label "8 with uppercase, lowercase, digit and symbol"
+          rules (object length 8 symbols "require" requireDigit true requireUpper true requireLower true))
+  (object id "symbol12"
+          label "12 with uppercase, lowercase, digit and symbol"
+          rules (object length 12 symbols "require" requireDigit true requireUpper true requireLower true))
+  (object id "symbol16"
+          label "16 with uppercase, lowercase, digit and symbol"
+          rules (object length 16 symbols "require" requireDigit true requireUpper true requireLower true))))
+(var DEFAULT_RULE "alnum8")
+
+(define-function ruleOption (id)
+  (var found (. RULE_OPTIONS filter (fn (o) (== o.id id))))
+  (return (if (< 0 found.length) (first found) null)))
+
+(define-function rulesOf (id)
+  (return (. (|| (ruleOption id) (ruleOption DEFAULT_RULE)) -rules)))
 
 (// 64 emoji, each a single code point, so a key byte maps to one with byte % 64.)
 (var EMOJI (Array.from "🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🐔🐧🐤🦆🦉🐴🦄🐝🐛🦋🐌🐞🐢🐍🐙🦀🐬🐳🐟🐘🦒🍎🍊🍋🍌🍉🍇🍓🍒🍑🍍🥝🥕🌽🍄🍞🧀🍔🍕🍩🍪🌵🌻🌙⭐🌈🔥🚀🎸"))
+
+(var PHONETIC (object
+  a "alpha" b "bravo" c "charlie" d "delta" e "echo" f "foxtrot" g "golf"
+  h "hotel" i "india" j "juliett" k "kilo" l "lima" m "mike" n "november"
+  o "oscar" p "papa" q "quebec" r "romeo" s "sierra" t "tango" u "uniform"
+  v "victor" w "whiskey" x "x-ray" y "yankee" z "zulu"
+  "0" "zero" "1" "one" "2" "two" "3" "three" "4" "four"
+  "5" "five" "6" "six" "7" "seven" "8" "eight" "9" "nine"
+  "!" "exclamation" "#" "hash" "$" "dollar" "%" "percent" "&" "ampersand"
+  "*" "asterisk" "+" "plus" "-" "minus" "=" "equals" "?" "question"
+  "@" "at" "^" "caret" "_" "underscore"))
+
+(// Words to read a password aloud. Uppercase letters give uppercase words.)
+(define-function phoneticWords (password)
+  (return (. (Array.from password) map (function (c)
+    (var lower (. c toLowerCase))
+    (var word (|| (array-get PHONETIC lower) c))
+    (return (if (and (!= c lower) (<= 0 (. UPPERS indexOf c))) (. word toUpperCase) word))))))
 
 (define-function utf8 (text)
   (return (. (new TextEncoder) encode (. text normalize "NFC"))))
@@ -80,55 +124,16 @@
 (define-function generationInput (input)
   (return (+ input.masterPassword "|" input.siteName "|" input.userid "|" input.comment)))
 
-(define-function defaultRules ()
-  (return (object
-    length 8
-    symbols "none"
-    symbolChars DEFAULT_SYMBOLS
-    requireDigit false
-    requireUpper false
-    requireLower false)))
-
-(define-function normalizeRules (raw)
-  (var d (defaultRules))
-  (when (or (not raw) (!= (typeof raw) "object"))
-    (return d))
-  (return (object
-    length (if (== (typeof raw.length) "number") raw.length d.length)
-    symbols (if (<= 0 (. SYMBOL_MODES indexOf raw.symbols)) raw.symbols d.symbols)
-    symbolChars (if (== (typeof raw.symbolChars) "string") raw.symbolChars d.symbolChars)
-    requireDigit (== raw.requireDigit true)
-    requireUpper (== raw.requireUpper true)
-    requireLower (== raw.requireLower true))))
-
-(// Printable ASCII symbols of s, without duplicates, in their original order.)
-(define-function uniqueSymbols (s)
-  (var seen "")
-  (. (Array.from (|| s "")) forEach (function (c)
-    (when (and (re-match SYMBOL_PATTERN c) (< (. seen indexOf c) 0))
-      (set! seen (+ seen c)))))
-  (return seen))
-
 (define-function symbolCharsOf (rules)
-  (return (if (== rules.symbols "none") "" (uniqueSymbols rules.symbolChars))))
+  (return (if (== rules.symbols "require") SYMBOLS "")))
 
 (define-function requiredSets (rules)
   (var sets (list))
   (when rules.requireDigit (. sets push DIGITS))
   (when rules.requireUpper (. sets push UPPERS))
   (when rules.requireLower (. sets push LOWERS))
-  (when (== rules.symbols "require") (. sets push (symbolCharsOf rules)))
+  (when (== rules.symbols "require") (. sets push SYMBOLS))
   (return sets))
-
-(define-function validateRules (rules)
-  (when (or (!= (typeof rules.length) "number")
-            (!= rules.length (Math.floor rules.length))
-            (< rules.length MIN_LENGTH)
-            (< MAX_LENGTH rules.length))
-    (return (+ "Length must be between " MIN_LENGTH " and " MAX_LENGTH ".")))
-  (when (and (!= rules.symbols "none") (empty? (uniqueSymbols rules.symbolChars)))
-    (return "Enter at least one symbol character."))
-  (return null))
 
 (define-function satisfiesRules (password rules)
   (var allowed (+ DIGITS UPPERS LOWERS (symbolCharsOf rules)))
@@ -162,8 +167,8 @@
   (return (. chars join "")))
 
 (// The original password is the alphanumerics of base64(key[0..32]), cut to 8.
-    Whenever that string, cut to the requested length, satisfies the rules it is
-    used as is, so default rules always give the original password.)
+    Whenever that string, cut to the rule's length, satisfies the rules it is
+    used as is, so the original rule always gives the original password.)
 (define-function passwordFromKey (key rules)
   (var legacy (. (base64 (. key slice 0 32)) replace (new RegExp "[^0-9a-zA-Z]" "g") ""))
   (when (<= rules.length legacy.length)
@@ -172,29 +177,13 @@
       (return candidate)))
   (return (sampledPassword (. key slice 32) rules)))
 
-(define-function describeRules (rules)
-  (var symbols (uniqueSymbols rules.symbolChars))
-  (var parts (list (+ rules.length " chars")))
-  (. parts push
-    (cond
-      (== rules.symbols "allow") (+ "symbols allowed " symbols)
-      (== rules.symbols "require") (+ "symbols required " symbols)
-      "letters and digits"))
-  (var required (list))
-  (when rules.requireDigit (. required push "digit"))
-  (when rules.requireUpper (. required push "uppercase"))
-  (when rules.requireLower (. required push "lowercase"))
-  (when (< 0 required.length)
-    (. parts push (+ "must include " (. required join ", "))))
-  (return (. parts join " · ")))
+(// One emoji (6 bits) to spot typos. More would help guessing the secret.)
+(define-function emojiFromKey (key)
+  (return (array-get EMOJI (% (array-get key 0) 64))))
 
-(define-function emojiFromKey (key count)
-  (return (. (. (Array.from (. key slice 0 count)) map (fn (b) (array-get EMOJI (% b 64)))) join "")))
-
-(// A short check value for a secret. Only meant for recognizing typos.)
 (define-function computeSample (text)
   (var bytes (utf8 text))
-  (return (. (scrypt.scrypt bytes bytes SAMPLE_N 8 1 32) then (fn (key) (emojiFromKey key SAMPLE_LENGTH)))))
+  (return (. (scrypt.scrypt bytes bytes SAMPLE_N 8 1 32) then emojiFromKey)))
 
 
 (// Model for this app)
@@ -229,7 +218,7 @@
     userid ""
     comment ""
     note ""
-    rules (defaultRules))
+    rule DEFAULT_RULE)
   output (emptyOutput 0)))
 
 
@@ -255,7 +244,7 @@
     userid (asString raw.userid)
     comment (asString raw.comment)
     note (asString raw.note)
-    rules (normalizeRules raw.rules))))
+    rule (if (ruleOption raw.rule) raw.rule DEFAULT_RULE))))
 
 (// Accepts the export format, or the plain array the old history used.)
 (define-function parsePresetList (data)
@@ -296,7 +285,7 @@
   (return (normalizePreset model.input)))
 
 (define-function savePresetFromInput ()
-  (when (or (not (hasPresetFields model.input)) (validateRules model.input.rules))
+  (when (not (hasPresetFields model.input))
     (return false))
   (upsertPreset (presetFromInput))
   (return true))
@@ -383,14 +372,6 @@
   (array-set! model.input key value)
   (render))
 
-(define-function setRule (key value)
-  (array-set! model.input.rules key value)
-  (render))
-
-(define-function parseLength (text)
-  (var n (parseInt text 10))
-  (return (if (isNaN n) "" n)))
-
 (define-function setFilter (value)
   (set! model.filter value)
   (render))
@@ -415,10 +396,10 @@
   (set! model.input.userid p.userid)
   (set! model.input.comment p.comment)
   (set! model.input.note p.note)
-  (set! model.input.rules (normalizeRules p.rules)))
+  (set! model.input.rule p.rule))
 
 (define-function startNew ()
-  (fillInput (object siteName model.urlDomain userid "" comment "" note "" rules (defaultRules)))
+  (fillInput (object siteName model.urlDomain userid "" comment "" note "" rule DEFAULT_RULE))
   (goTo "params"))
 
 (define-function selectPreset (p)
@@ -436,9 +417,12 @@
   (clearOutput)
   (goTo "select"))
 
+(define-function openSettings ()
+  (clearOutput)
+  (goTo "settings"))
+
 (define-function canGenerate (m)
   (return (and (not (empty? m.input.masterPassword))
-               (not (validateRules m.input.rules))
                (not m.output.running))))
 
 (define-function generate ()
@@ -446,7 +430,7 @@
     (return false))
   (savePresetFromInput)
   (var token (+ model.output.token 1))
-  (var rules (normalizeRules model.input.rules))
+  (var rules (rulesOf model.input.rule))
   (var source (utf8 (generationInput model.input)))
   (set! model.output (emptyOutput token))
   (set! model.output.running true)
@@ -603,14 +587,6 @@
           onBlur (fn (e) (prop.onFocusChange false e))
           onChange (|| prop.onChange noop))))
 
-(define-react-template Check
-  (label (className "check")
-    (input (type "checkbox"
-            id prop.id
-            checked prop.checked
-            onChange (fn (e) (setRule prop.id e.target.checked))))
-    (span () prop.label)))
-
 (define-react-template PresetItem
   (li (className "preset")
     (button (className "preset-main" type "button" onClick (fn () (selectPreset prop.preset)))
@@ -618,7 +594,7 @@
       (, if prop.preset.userid (react-html (span (className "preset-user") prop.preset.userid)) null)
       (, if prop.preset.comment (react-html (span (className "preset-comment") prop.preset.comment)) null)
       (, if prop.preset.note (react-html (span (className "preset-note") prop.preset.note)) null)
-      (span (className "preset-rules") (, describeRules prop.preset.rules)))
+      (span (className "preset-rules") (, . (ruleOption prop.preset.rule) -label)))
     (button (className "button icon danger"
              type "button"
              title "Delete"
@@ -638,25 +614,22 @@
       (, . (filteredPresets prop.model) map (fn (p)
         (react-html (PresetItem (key (presetKey p) preset p))))))))
 
-(define-react-template Bookmarklet
-  (details (className "section")
-    (summary () "Bookmarklet")
-    (p ()
-      "Drag this link to the bookmark bar: "
-      (a (href "javascript:void(function(){window.open('https://pass.ikeji.ma/?url='+encodeURIComponent(location.href));})()"
-          onClick (fn (e) (e.preventDefault)))
-        "Generate Password"))))
-
 (define-react-template SelectStep
   (div ()
     (h2 () "Choose a preset")
-    (div (className "actions")
+    (div (className "toolbar")
       (button (className "button primary" type "button" onClick startNew) "New"))
     (, if (empty? prop.model.presets)
       (react-html (p (className "muted") "No presets yet. Presets are saved when you generate a password."))
-      (react-html (PresetList (model prop.model))))
-    (details (className "section")
-      (summary () "Import / export presets")
+      (react-html (PresetList (model prop.model))))))
+
+(define-react-template SettingsPage
+  (div ()
+    (h2 () "Settings")
+    (section (className "settings-section")
+      (h3 () "Presets")
+      (p (className "muted")
+        (, + prop.model.presets.length " presets are saved in this browser. Export them to back up or move to another device."))
       (div (className "actions")
         (button (className "button"
                  type "button"
@@ -669,48 +642,18 @@
                   type "file"
                   accept "application/json,.json"
                   onChange importPresetsFromEvent)))))
-    (Bookmarklet ())))
-
-(define-function RulesEditor (prop)
-  (var rules prop.rules)
-  (return (react-html
-    (details (className "section")
-      (summary ()
-        "Password rules"
-        (span (className "rules-summary") (, describeRules rules)))
-      (Field (label "Length" htmlFor "length" hint (+ MIN_LENGTH "–" MAX_LENGTH " characters"))
-        (input (id "length"
-                className "input"
-                type "number"
-                inputMode "numeric"
-                min MIN_LENGTH
-                max MAX_LENGTH
-                value rules.length
-                onChange (fn (e) (setRule "length" (parseLength e.target.value))))))
-      (Field (label "Symbols" htmlFor "symbols")
-        (select (id "symbols"
-                 className "input"
-                 value rules.symbols
-                 onChange (fn (e) (setRule "symbols" e.target.value)))
-          (option (value "none") "Don't use")
-          (option (value "allow") "Allow")
-          (option (value "require") "Require")))
-      (, if (== rules.symbols "none")
-        null
-        (react-html
-          (TextField (id "symbolChars"
-                      label "Symbol characters"
-                      hint "Printable ASCII symbols the site accepts."
-                      value rules.symbolChars
-                      onChange (fn (e) (setRule "symbolChars" e.target.value))))))
-      (div (className "checks")
-        (Check (id "requireDigit" label "Require a digit" checked rules.requireDigit))
-        (Check (id "requireUpper" label "Require an uppercase letter" checked rules.requireUpper))
-        (Check (id "requireLower" label "Require a lowercase letter" checked rules.requireLower)))))))
+    (section (className "settings-section")
+      (h3 () "Bookmarklet")
+      (p ()
+        "Drag this link to the bookmark bar: "
+        (a (href "javascript:void(function(){window.open('https://pass.ikeji.ma/?url='+encodeURIComponent(location.href));})()"
+            onClick (fn (e) (e.preventDefault)))
+          "Generate Password")))
+    (div (className "actions")
+      (button (className "button" type "button" onClick (fn () (goTo "select"))) "Back"))))
 
 (define-function ParamsStep (prop)
   (var input prop.model.input)
-  (var error (validateRules input.rules))
   (return (react-html
     (form (noValidate true onSubmit (function (e) (e.preventDefault) (generate)))
       (h2 () "Parameters")
@@ -736,29 +679,43 @@
                   hint "Used for generation. Change it to get a different password."
                   value input.comment
                   onChange (fn (e) (setInput "comment" e.target.value))))
+      (Field (label "Password rule" htmlFor "rule" hint (+ "Symbols are chosen from " SYMBOLS))
+        (select (id "rule"
+                 className "input"
+                 value input.rule
+                 onChange (fn (e) (setInput "rule" e.target.value)))
+          (, . RULE_OPTIONS map (fn (o)
+            (react-html (option (key o.id value o.id) o.label))))))
       (Field (label "Note" htmlFor "note" hint "Not used for generation.")
         (textarea (id "note"
                    className "input"
                    rows 3
                    value input.note
                    onChange (fn (e) (setInput "note" e.target.value)))))
-      (RulesEditor (rules input.rules))
-      (, if error (react-html (p (className "error" role "alert") error)) null)
       (div (className "actions")
         (button (className "button" type "button" onClick (fn () (goTo "select"))) "Back")
         (button (className "button"
                  type "button"
                  onClick savePresetWithNotice
-                 disabled (or (not (hasPresetFields input)) (Boolean error)))
+                 disabled (not (hasPresetFields input)))
           "Save preset")
         (button (className "button primary"
                  type "submit"
                  disabled (not (canGenerate prop.model)))
           "Generate"))))))
 
+(define-react-template Phonetic
+  (ol (className "phonetic" "aria-label" "Password spelled out")
+    (, . (phoneticWords prop.password) map (fn (word i)
+      (react-html
+        (li (key i)
+          (span (className "phonetic-char") (, array-get (Array.from prop.password) i))
+          (span (className "phonetic-word") word)))))))
+
 (define-function ResultStep (prop)
   (var out prop.model.output)
   (var input prop.model.input)
+  (var focused prop.model.focus.password)
   (return (react-html
     (div ()
       (h2 () "Password")
@@ -775,20 +732,24 @@
                 (SecretInput (id "password"
                               value out.password
                               readOnly true
-                              focused prop.model.focus.password
-                              onFocusChange (function (focused e)
-                                (setFocus "password" focused)
-                                (when focused
+                              focused focused
+                              onFocusChange (function (isFocused e)
+                                (setFocus "password" isFocused)
+                                (when isFocused
                                   (var target e.target)
                                   (setTimeout (fn () (target.select)) 0)))))
                 (span (className "sample password-sample" title "Check emoji for the generated password")
                   out.sample)))
+            (, if focused (react-html (Phonetic (password out.password))) null)
             (button (className "button primary" type "button" onClick copyPassword) "Copy"))))
-      (div (className "actions")
-        (, if out.running
-          (react-html (button (className "button" type "button" onClick cancel) "Cancel"))
-          (react-html (button (className "button" type "button" onClick backToParams) "Back")))
-        (button (className "button" type "button" onClick startOver) "Done"))))))
+      (, if out.running
+        (react-html
+          (div (className "actions")
+            (button (className "button" type "button" onClick cancel) "Cancel")))
+        (react-html
+          (div (className "actions")
+            (button (className "button" type "button" onClick backToParams) "Back")
+            (button (className "button" type "button" onClick startOver) "Done"))))))))
 
 (define-react-template Footer
   (footer (className "footer")
@@ -802,12 +763,18 @@
 (define-react-template App
   (div (className "app")
     (header (className "topbar")
-      (h1 () "scrypt test"))
-    (Steps (step prop.model.step))
+      (div (className "topbar-inner")
+        (h1 () "scrypt test")
+        (, if (== prop.model.step "settings")
+          null
+          (react-html
+            (button (className "topbar-button" type "button" onClick openSettings) "Settings")))))
+    (, if (== prop.model.step "settings") null (react-html (Steps (step prop.model.step))))
     (main (className "card")
       (, cond
         (== prop.model.step "select") (react-html (SelectStep (model prop.model)))
         (== prop.model.step "params") (react-html (ParamsStep (model prop.model)))
+        (== prop.model.step "settings") (react-html (SettingsPage (model prop.model)))
         (react-html (ResultStep (model prop.model)))))
     (, if prop.model.notice
       (react-html (div (className "notice" role "status") prop.model.notice))
@@ -827,8 +794,9 @@
   render render
   passwordFromKey passwordFromKey
   satisfiesRules satisfiesRules
-  validateRules validateRules
-  defaultRules defaultRules
+  RULE_OPTIONS RULE_OPTIONS
+  rulesOf rulesOf
+  phoneticWords phoneticWords
   emojiFromKey emojiFromKey
   EMOJI EMOJI
   importPresetsText importPresetsText

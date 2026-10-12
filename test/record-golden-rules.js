@@ -8,16 +8,15 @@ const ruleSets = require("./rule-sets");
 
 (async () => {
   const app = await open();
-  const { passwordFromKey, defaultRules } = app.window.scrypttest;
+  const { passwordFromKey, rulesOf } = app.window.scrypttest;
   const out = [];
   for (const v of golden.slice(0, 3)) {
     const key = generationKey(v);
-    for (const r of ruleSets) {
-      const rules = { ...defaultRules(), ...r };
-      out.push({ masterPassword: v.masterPassword, siteName: v.siteName, userid: v.userid, comment: v.comment, rules: r, password: passwordFromKey(key, rules) });
+    for (const rule of ruleSets) {
+      out.push({ masterPassword: v.masterPassword, siteName: v.siteName, userid: v.userid, comment: v.comment, rule, password: passwordFromKey(key, rulesOf(rule)) });
     }
   }
   app.window.close();
   fs.writeFileSync(path.join(__dirname, "golden-rules.json"), JSON.stringify(out, null, 2) + "\n");
-  for (const o of out) console.log(JSON.stringify(o.rules), o.password);
+  for (const o of out) console.log(o.rule, o.password);
 })().catch((e) => { console.error(e); process.exit(1); });

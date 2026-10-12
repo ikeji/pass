@@ -13,11 +13,19 @@ function generationKey(v) {
 }
 
 function sampleOf(window, text) {
-  return window.scrypttest.emojiFromKey(nodeScrypt(text, 1 << 10, 32), 3);
+  return window.scrypttest.emojiFromKey(nodeScrypt(text, 1 << 10, 32));
+}
+
+const opened = [];
+
+// Closes every window, including ones a failed test left open (their timers keep Node running).
+function closeAll() {
+  while (opened.length) opened.pop().close();
 }
 
 async function open(options) {
   const app = await openApp(options);
+  opened.push(app.window);
   const { window, document } = app;
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -62,4 +70,4 @@ async function open(options) {
   return { ...app, $, $$, type, click, button, clickButton, fillParams, generate, errors, tick };
 }
 
-module.exports = { open, waitFor, nodeScrypt, generationKey, sampleOf };
+module.exports = { open, closeAll, waitFor, nodeScrypt, generationKey, sampleOf };

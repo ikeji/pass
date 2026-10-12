@@ -4,10 +4,12 @@ const assert = require("node:assert");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { open, waitFor, generationKey, sampleOf } = require("./lib/ui");
+const { open, closeAll, waitFor, generationKey, sampleOf } = require("./lib/ui");
 const { ROOT } = require("./lib/browser");
 const golden = require("./golden.json");
 const goldenRules = require("./golden-rules.json");
+
+test.afterEach(closeAll);
 
 async function newPassword(v, options) {
   const app = await open(options);
@@ -32,92 +34,74 @@ test("generates the same passwords as the original app", async (t) => {
 
 test("rule-based passwords are stable", async (t) => {
   const app = await open();
-  const { passwordFromKey, defaultRules } = app.window.scrypttest;
+  const { passwordFromKey, rulesOf, RULE_OPTIONS } = app.window.scrypttest;
+  // Every option is covered, so adding one forces recording its outputs.
+  assert.deepStrictEqual([...new Set(goldenRules.map((g) => g.rule))], [...RULE_OPTIONS.map((o) => o.id)]);
   const keys = new Map();
   for (const g of goldenRules) {
     const id = JSON.stringify([g.masterPassword, g.siteName, g.userid, g.comment]);
     if (!keys.has(id)) keys.set(id, generationKey(g));
-    const rules = { ...defaultRules(), ...g.rules };
-    assert.strictEqual(passwordFromKey(keys.get(id), rules), g.password, JSON.stringify(g.rules));
+    assert.strictEqual(passwordFromKey(keys.get(id), rulesOf(g.rule)), g.password, g.rule);
   }
   app.window.close();
 });
 
-test("rules are applied through the UI", async () => {
+test("the rule is applied through the UI", async () => {
   const v = golden[0];
   const app = await open();
   await app.clickButton("New");
   await app.fillParams(v);
-  await app.click("details.section summary");
-  await app.type("#length", "16");
-  await app.type("#symbols", "require");
-  await app.type("#symbolChars", "!#$%&*+-=?@^_");
-  await app.click("#requireDigit");
+  await app.type("#rule", "symbol12");
   const password = await app.generate();
-  const { passwordFromKey, satisfiesRules } = app.window.scrypttest;
-  const rules = { length: 16, symbols: "require", symbolChars: "!#$%&*+-=?@^_", requireDigit: true, requireUpper: false, requireLower: false };
-  assert.strictEqual(password, passwordFromKey(generationKey(v), rules));
-  assert.ok(satisfiesRules(password, rules));
-  // The rules are stored with the preset.
+  const { passwordFromKey, satisfiesRules, rulesOf } = app.window.scrypttest;
+  assert.strictEqual(password, passwordFromKey(generationKey(v), rulesOf("symbol12")));
+  assert.ok(satisfiesRules(password, rulesOf("symbol12")));
+  assert.strictEqual(password.length, 12);
+  // The rule is stored with the preset.
   const stored = JSON.parse(app.window.localStorage.getItem("presets"));
-  assert.deepStrictEqual(stored.presets[0].rules, rules);
+  assert.strictEqual(stored.presets[0].rule, "symbol12");
   app.window.close();
 });
 
 test("passwords from random keys follow the rules", async () => {
   const app = await open();
-  const { passwordFromKey, satisfiesRules, defaultRules, validateRules } = app.window.scrypttest;
+  const { passwordFromKey, satisfiesRules, rulesOf, RULE_OPTIONS } = app.window.scrypttest;
+  const ids = RULE_OPTIONS.map((o) => o.id);
+  assert.strictEqual(new Set(ids).size, ids.length);
   const ruleSets = [
-    {},
-    { length: 4 },
-    { length: 64 },
-    { length: 10, requireDigit: true },
-    { length: 6, requireDigit: true, requireUpper: true, requireLower: true },
-    { length: 12, symbols: "allow" },
-    { length: 12, symbols: "require", symbolChars: "@" },
-    { length: 4, symbols: "require", symbolChars: "_", requireDigit: true, requireUpper: true, requireLower: true },
-    { length: 30, symbols: "require", symbolChars: "a b-c-" },
+    ...RULE_OPTIONS.map((o) => o.rules),
+    { length: 4, symbols: "require", requireDigit: true, requireUpper: true, requireLower: true },
+    { length: 64, symbols: "require" },
+    { length: 64, symbols: "none" },
   ];
-  for (const r of ruleSets) {
-    const rules = { ...defaultRules(), ...r };
-    assert.strictEqual(validateRules(rules), null, JSON.stringify(r));
+  for (const rules of ruleSets) {
     for (let i = 0; i < 300; i++) {
       const key = new Uint8Array(crypto.randomBytes(32 + 1024));
       const password = passwordFromKey(key, rules);
-      assert.ok(satisfiesRules(password, rules), `${password} ${JSON.stringify(r)}`);
+      assert.ok(satisfiesRules(password, rules), `${password} ${JSON.stringify(rules)}`);
       assert.strictEqual(passwordFromKey(key, rules), password);
       if (rules.symbols === "none") assert.match(password, /^[0-9A-Za-z]+$/);
-      // Letters, digits and only the listed symbols ("a b-c-" allows just "-").
-      if (r.symbolChars === "a b-c-") assert.match(password, /^[0-9A-Za-z-]+$/);
+      else assert.match(password, /^[0-9A-Za-z!#$%&*+\-=?@^_]+$/);
     }
   }
-  // Default rules are exactly the original algorithm.
+  // The original rule is exactly the original algorithm.
   for (let i = 0; i < 300; i++) {
     const key = new Uint8Array(crypto.randomBytes(32 + 1024));
     const legacy = Buffer.from(key.slice(0, 32)).toString("base64").replace(/[^0-9a-zA-Z]/g, "").slice(0, 8);
-    assert.strictEqual(passwordFromKey(key, defaultRules()), legacy);
+    assert.strictEqual(passwordFromKey(key, rulesOf("alnum8")), legacy);
   }
+  // Unknown ids fall back to the original rule.
+  assert.strictEqual(rulesOf("nope"), rulesOf("alnum8"));
   app.window.close();
 });
 
-test("invalid rules disable Generate", async () => {
+test("phonetic spelling", async () => {
   const app = await open();
-  await app.clickButton("New");
-  await app.fillParams({ masterPassword: "m", siteName: "s" });
-  assert.strictEqual(app.button("Generate").disabled, false);
-  await app.click("details.section summary");
-  await app.type("#length", "3");
-  assert.strictEqual(app.button("Generate").disabled, true);
-  assert.match(app.$(".error").textContent, /Length/);
-  await app.type("#length", "65");
-  assert.strictEqual(app.button("Generate").disabled, true);
-  await app.type("#length", "12");
-  await app.type("#symbols", "allow");
-  await app.type("#symbolChars", "abc");
-  assert.strictEqual(app.button("Generate").disabled, true);
-  assert.match(app.$(".error").textContent, /symbol/);
-  await app.type("#symbolChars", "abc!");
-  assert.strictEqual(app.button("Generate").disabled, false);
+  const { phoneticWords } = app.window.scrypttest;
+  assert.deepStrictEqual([...phoneticWords("a1B_Il0O")], ["alpha", "one", "BRAVO", "underscore", "INDIA", "lima", "zero", "OSCAR"]);
+  assert.deepStrictEqual([...phoneticWords("!#$%&*+-=?@^_")], [
+    "exclamation", "hash", "dollar", "percent", "ampersand", "asterisk", "plus", "minus", "equals", "question", "at", "caret", "underscore",
+  ]);
   app.window.close();
 });
 
@@ -131,7 +115,7 @@ test("check emoji for master and generated password", async () => {
   await app.type("#master", "password");
   const sample = await waitFor(() => app.$(".master-sample").textContent);
   assert.strictEqual(sample, sampleOf(app.window, "password"));
-  assert.strictEqual([...sample].length, 3);
+  assert.strictEqual([...sample].length, 1);
   await app.type("#master", "passwore");
   const other = await waitFor(() => app.$(".master-sample").textContent);
   assert.strictEqual(other, sampleOf(app.window, "passwore"));
@@ -149,10 +133,15 @@ test("secrets are hidden unless focused, and can be copied", async () => {
   const { app, password } = await newPassword(golden[0]);
   const out = app.$("#password");
   assert.strictEqual(out.type, "password");
+  assert.strictEqual(app.$(".phonetic"), null);
   out.focus();
   await waitFor(() => app.$("#password").type === "text");
+  const words = [...app.$$(".phonetic-word")].map((e) => e.textContent);
+  assert.deepStrictEqual(words, [...app.window.scrypttest.phoneticWords(password)]);
+  assert.strictEqual([...app.$$(".phonetic-char")].map((e) => e.textContent).join(""), password);
   out.blur();
   await waitFor(() => app.$("#password").type === "password");
+  assert.strictEqual(app.$(".phonetic"), null);
 
   await app.clickButton("Copy");
   await waitFor(() => app.window.navigator.clipboard.written.length);
@@ -184,11 +173,15 @@ test("generation can be cancelled", async () => {
   await app.clickButton("New");
   await app.fillParams(golden[0]);
   await app.clickButton("Generate");
+  await waitFor(() => app.button("Cancel"));
+  assert.strictEqual(app.button("Done"), undefined);
+  assert.strictEqual(app.button("Back"), undefined);
   await app.clickButton("Cancel");
   assert.match(app.$(".status").textContent, /Cancelled/);
   await new Promise((r) => setTimeout(r, 500));
   assert.strictEqual(app.$("#password"), null);
   assert.ok(app.button("Back"));
+  assert.ok(app.button("Done"));
   app.window.close();
 });
 
@@ -241,7 +234,7 @@ test("old history is migrated to presets", async () => {
   assert.strictEqual(stored.format, "scrypttest-presets");
   assert.deepStrictEqual(stored.presets.map((p) => p.siteName), ["example.com", "foo.org"]);
   assert.strictEqual(stored.presets[0].note, "");
-  assert.strictEqual(stored.presets[0].rules.length, 8);
+  assert.strictEqual(stored.presets[0].rule, "alnum8");
   assert.strictEqual(app.window.localStorage.getItem("histories"), histories);
   app.window.close();
 });
@@ -251,8 +244,8 @@ test("presets can be exported and imported", async () => {
     format: "scrypttest-presets",
     version: 1,
     presets: [
-      { siteName: "a.com", userid: "u", comment: "", note: "old", rules: { length: 8 } },
-      { siteName: "b.com", userid: "u", comment: "", note: "", rules: {} },
+      { siteName: "a.com", userid: "u", comment: "", note: "old", rule: "alnum8" },
+      { siteName: "b.com", userid: "u", comment: "", note: "", rule: "unknown" },
     ],
   });
   const app = await open({ storage: { presets: existing } });
@@ -261,7 +254,8 @@ test("presets can be exported and imported", async () => {
   let downloaded = null;
   app.window.URL.createObjectURL = (blob) => { downloaded = blob; return "blob:x"; };
   app.window.URL.revokeObjectURL = () => {};
-  await app.click("details.section summary");
+  await app.clickButton("Settings");
+  assert.match(app.$(".settings-section").textContent, /2 presets/);
   await app.clickButton("Export");
   assert.ok(downloaded);
   assert.deepStrictEqual(JSON.parse(presetsJson()).presets.map((p) => p.siteName), ["a.com", "b.com"]);
@@ -270,7 +264,7 @@ test("presets can be exported and imported", async () => {
     format: "scrypttest-presets",
     version: 1,
     presets: [
-      { siteName: "a.com", userid: "u", comment: "", note: "new", rules: { length: 12, symbols: "allow" } },
+      { siteName: "a.com", userid: "u", comment: "", note: "new", rule: "symbol12" },
       { siteName: "c.com", userid: "", comment: "", note: "" },
       { siteName: "", userid: "", comment: "" },
       "garbage",
@@ -279,8 +273,9 @@ test("presets can be exported and imported", async () => {
   assert.strictEqual(count, 2);
   assert.deepStrictEqual([...model.presets.map((p) => p.siteName)], ["a.com", "b.com", "c.com"]);
   assert.strictEqual(model.presets[0].note, "new");
-  assert.strictEqual(model.presets[0].rules.length, 12);
-  assert.strictEqual(model.presets[2].rules.length, 8);
+  assert.strictEqual(model.presets[0].rule, "symbol12");
+  assert.strictEqual(model.presets[1].rule, "alnum8");
+  assert.strictEqual(model.presets[2].rule, "alnum8");
   assert.throws(() => importPresetsText("{}"));
   assert.throws(() => importPresetsText("not json"));
 
@@ -346,5 +341,22 @@ test("the page loads nothing from the network", async () => {
   await waitFor(() => app.button("New"));
   assert.deepStrictEqual(app.blocked, []);
   assert.deepStrictEqual(app.errors(), []);
+  app.window.close();
+});
+
+test("settings page", async () => {
+  const app = await open();
+  await waitFor(() => app.$(".steps"));
+  await app.clickButton("Settings");
+  assert.strictEqual(app.$(".steps"), null);
+  assert.strictEqual(app.button("Settings"), undefined);
+  assert.match(app.$("main").textContent, /Bookmarklet/);
+  assert.ok(app.$("input[type=file]"));
+  await app.clickButton("Back");
+  assert.ok(app.button("New"));
+  assert.ok(app.$(".steps"));
+  // Import and the bookmarklet are no longer on the first page.
+  assert.strictEqual(app.$("input[type=file]"), null);
+  assert.doesNotMatch(app.$("main").textContent, /Bookmarklet/);
   app.window.close();
 });
