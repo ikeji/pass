@@ -1,0 +1,11 @@
+{
+  "name": "scrypttest-tests",
+  "private": true,
+  "description": "Integration tests. Development only; nothing here is served.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "masterPassword": "password",
+    "siteName": "example.com",
+    "userid": "alice",
+    "comment": "",
+    "password": "SDxz125t"
+  },
+  {
+    "masterPassword": "correct horse battery staple",
+    "siteName": "",
+    "userid": "",
+    "comment": "",
+    "password": "W4lmnoNe"
+  },
+  {
+    "masterPassword": "Pa$$w0rd!",
+    "siteName": "google.com",
+    "userid": "bob@example.com",
+    "comment": "2",
+    "password": "BBbwFoWP"
+  },
+  {
+    "masterPassword": "マスターパスワード",
+    "siteName": "日本語.jp",
+    "userid": "ユーザー",
+    "comment": "メモ",
+    "password": "G1KvMs77"
+  },
+  {
+    "masterPassword": "がぎ",
+    "siteName": "é.com",
+    "userid": "",
+    "comment": "",
+    "password": "EGZXwQu0"
+  },
+  {
+    "masterPassword": "🔑emoji🔒",
+    "siteName": "a|b",
+    "userid": "|",
+    "comment": "c|",
+    "password": "baGFYiBU"
+  },
+  {
+    "masterPassword": " leading and trailing spaces ",
+    "siteName": " x ",
+    "userid": " ",
+    "comment": " ",
+    "password": "ZfSoP7ux"
+  },
+  {
+    "masterPassword": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "siteName": "very-long-subdomain.example.co.uk",
+    "userid": "u",
+    "comment": "comment",
+    "password": "JtWxH2ma"
+  }
+]
