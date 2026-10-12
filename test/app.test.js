@@ -98,7 +98,7 @@ test("passwords from random keys follow the rules", async () => {
 test("phonetic spelling", async () => {
   const app = await open();
   const { phoneticWords } = app.window.scrypttest;
-  assert.deepStrictEqual([...phoneticWords("a1B_Il0O")], ["alpha", "one", "BRAVO", "underscore", "INDIA", "lima", "zero", "OSCAR"]);
+  assert.deepStrictEqual([...phoneticWords("a1B_Il0O")], ["alpha", "one", "large bravo", "underscore", "large india", "lima", "zero", "large oscar"]);
   assert.deepStrictEqual([...phoneticWords("!#$%&*+-=?@^_")], [
     "exclamation", "hash", "dollar", "percent", "ampersand", "asterisk", "plus", "minus", "equals", "question", "at", "caret", "underscore",
   ]);
@@ -133,15 +133,17 @@ test("secrets are hidden unless focused, and can be copied", async () => {
   const { app, password } = await newPassword(golden[0]);
   const out = app.$("#password");
   assert.strictEqual(out.type, "password");
-  assert.strictEqual(app.$(".phonetic"), null);
+  // Hidden but keeping its space.
+  assert.ok(app.$(".phonetic").classList.contains("is-hidden"));
   out.focus();
   await waitFor(() => app.$("#password").type === "text");
+  assert.ok(!app.$(".phonetic").classList.contains("is-hidden"));
   const words = [...app.$$(".phonetic-word")].map((e) => e.textContent);
   assert.deepStrictEqual(words, [...app.window.scrypttest.phoneticWords(password)]);
   assert.strictEqual([...app.$$(".phonetic-char")].map((e) => e.textContent).join(""), password);
   out.blur();
   await waitFor(() => app.$("#password").type === "password");
-  assert.strictEqual(app.$(".phonetic"), null);
+  assert.ok(app.$(".phonetic").classList.contains("is-hidden"));
 
   await app.clickButton("Copy");
   await waitFor(() => app.window.navigator.clipboard.written.length);

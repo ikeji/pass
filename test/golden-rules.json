@@ -12,40 +12,8 @@
     "siteName": "example.com",
     "userid": "alice",
     "comment": "",
-    "rule": "mixed8",
-    "password": "SDxz125t"
-  },
-  {
-    "masterPassword": "password",
-    "siteName": "example.com",
-    "userid": "alice",
-    "comment": "",
-    "rule": "mixed12",
-    "password": "SDxz125t2vpW"
-  },
-  {
-    "masterPassword": "password",
-    "siteName": "example.com",
-    "userid": "alice",
-    "comment": "",
-    "rule": "symbol8",
-    "password": "Cl0NQL#-"
-  },
-  {
-    "masterPassword": "password",
-    "siteName": "example.com",
-    "userid": "alice",
-    "comment": "",
     "rule": "symbol12",
     "password": "A0yC$N*#LQ-l"
-  },
-  {
-    "masterPassword": "password",
-    "siteName": "example.com",
-    "userid": "alice",
-    "comment": "",
-    "rule": "symbol16",
-    "password": "LNL-#lQBA*$CDyy0"
   },
   {
     "masterPassword": "correct horse battery staple",
@@ -60,40 +28,8 @@
     "siteName": "",
     "userid": "",
     "comment": "",
-    "rule": "mixed8",
-    "password": "W4lmnoNe"
-  },
-  {
-    "masterPassword": "correct horse battery staple",
-    "siteName": "",
-    "userid": "",
-    "comment": "",
-    "rule": "mixed12",
-    "password": "W4lmnoNeLEd2"
-  },
-  {
-    "masterPassword": "correct horse battery staple",
-    "siteName": "",
-    "userid": "",
-    "comment": "",
-    "rule": "symbol8",
-    "password": "f7GtbWL&"
-  },
-  {
-    "masterPassword": "correct horse battery staple",
-    "siteName": "",
-    "userid": "",
-    "comment": "",
     "rule": "symbol12",
     "password": "qWoMb&S7tfGL"
-  },
-  {
-    "masterPassword": "correct horse battery staple",
-    "siteName": "",
-    "userid": "",
-    "comment": "",
-    "rule": "symbol16",
-    "password": "bRoG*WMB&tfL6q7S"
   },
   {
     "masterPassword": "Pa$$w0rd!",
@@ -108,39 +44,7 @@
     "siteName": "google.com",
     "userid": "bob@example.com",
     "comment": "2",
-    "rule": "mixed8",
-    "password": "JYlN47U7"
-  },
-  {
-    "masterPassword": "Pa$$w0rd!",
-    "siteName": "google.com",
-    "userid": "bob@example.com",
-    "comment": "2",
-    "rule": "mixed12",
-    "password": "lU6N77cY445J"
-  },
-  {
-    "masterPassword": "Pa$$w0rd!",
-    "siteName": "google.com",
-    "userid": "bob@example.com",
-    "comment": "2",
-    "rule": "symbol8",
-    "password": "t=lN&7^7"
-  },
-  {
-    "masterPassword": "Pa$$w0rd!",
-    "siteName": "google.com",
-    "userid": "bob@example.com",
-    "comment": "2",
     "rule": "symbol12",
     "password": "l^gN77_=&&st"
-  },
-  {
-    "masterPassword": "Pa$$w0rd!",
-    "siteName": "google.com",
-    "userid": "bob@example.com",
-    "comment": "2",
-    "rule": "symbol16",
-    "password": "g=7&_&s7E%^t_lN="
   }
 ]

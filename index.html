@@ -70,21 +70,9 @@
   (object id "alnum8"
           label "8 letters and digits (original)"
           rules (object length 8 symbols "none"))
-  (object id "mixed8"
-          label "8 with uppercase, lowercase and digit"
-          rules (object length 8 symbols "none" requireDigit true requireUpper true requireLower true))
-  (object id "mixed12"
-          label "12 with uppercase, lowercase and digit"
-          rules (object length 12 symbols "none" requireDigit true requireUpper true requireLower true))
-  (object id "symbol8"
-          label "8 with uppercase, lowercase, digit and symbol"
-          rules (object length 8 symbols "require" requireDigit true requireUpper true requireLower true))
   (object id "symbol12"
           label "12 with uppercase, lowercase, digit and symbol"
-          rules (object length 12 symbols "require" requireDigit true requireUpper true requireLower true))
-  (object id "symbol16"
-          label "16 with uppercase, lowercase, digit and symbol"
-          rules (object length 16 symbols "require" requireDigit true requireUpper true requireLower true))))
+          rules (object length 12 symbols "require" requireDigit true requireUpper true requireLower true))))
 (var DEFAULT_RULE "alnum8")
 
 (define-function ruleOption (id)
@@ -108,12 +96,12 @@
   "*" "asterisk" "+" "plus" "-" "minus" "=" "equals" "?" "question"
   "@" "at" "^" "caret" "_" "underscore"))
 
-(// Words to read a password aloud. Uppercase letters give uppercase words.)
+(// Words to read a password aloud. Uppercase letters are prefixed with "large".)
 (define-function phoneticWords (password)
   (return (. (Array.from password) map (function (c)
     (var lower (. c toLowerCase))
     (var word (|| (array-get PHONETIC lower) c))
-    (return (if (and (!= c lower) (<= 0 (. UPPERS indexOf c))) (. word toUpperCase) word))))))
+    (return (if (<= 0 (. UPPERS indexOf c)) (+ "large " word) word))))))
 
 (define-function utf8 (text)
   (return (. (new TextEncoder) encode (. text normalize "NFC"))))
@@ -704,8 +692,11 @@
                  disabled (not (canGenerate prop.model)))
           "Generate"))))))
 
+(// Keeps its space while hidden so the page does not jump on focus changes.)
 (define-react-template Phonetic
-  (ol (className "phonetic" "aria-label" "Password spelled out")
+  (ol (className (if prop.visible "phonetic" "phonetic is-hidden")
+       "aria-label" "Password spelled out"
+       "aria-hidden" (not prop.visible))
     (, . (phoneticWords prop.password) map (fn (word i)
       (react-html
         (li (key i)
@@ -740,7 +731,7 @@
                                   (setTimeout (fn () (target.select)) 0)))))
                 (span (className "sample password-sample" title "Check emoji for the generated password")
                   out.sample)))
-            (, if focused (react-html (Phonetic (password out.password))) null)
+            (Phonetic (password out.password visible focused))
             (button (className "button primary" type "button" onClick copyPassword) "Copy"))))
       (, if out.running
         (react-html
